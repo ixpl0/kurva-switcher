@@ -1,6 +1,7 @@
 #include <windows.h>
 #include "../include/HotkeyListener.h"
 #include "../include/TextReplacer.h"
+#include "../resource.h"
 
 #define WM_TRAYICON (WM_APP + 1)
 #define ID_EXIT 1001
@@ -60,7 +61,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = (HICON)LoadImage(hInstance, "kurva.ico", IMAGE_ICON, 0, 0, LR_LOADFROMFILE);
+    nid.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
     nid.uFlags |= NIF_ICON;
     strcpy_s(nid.szTip, "Kurva Switcher");
 

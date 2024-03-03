@@ -132,9 +132,13 @@
   <ItemGroup>
     <ClInclude Include="include\HotkeyListener.h" />
     <ClInclude Include="include\TextReplacer.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="kurva.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

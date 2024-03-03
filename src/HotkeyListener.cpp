@@ -10,7 +10,7 @@ HotkeyListener::~HotkeyListener() {
 }
 
 bool HotkeyListener::initialize() {
-    if (RegisterHotKey(NULL, hotkeyId, 0, VK_SCROLL)) {
+    if (RegisterHotKey(NULL, hotkeyId, 0, VK_PAUSE)) {
         registered = true;
         return true;
     }
