@@ -9,12 +9,14 @@ public:
     ~HotkeyListener();
 
     bool initialize();
+    void unregisterHotkey(int hotkeyId) const;
     bool isHotkeyPressed(MSG& msg) const;
 
 private:
-    int hotkeyId;
-    bool registered;
-    void unregisterHotkey() const;
+    int hotkeyId1;
+    int hotkeyId2;
+    bool registered1;
+    bool registered2;
 };
 
 #endif // HOTKEYLISTENER_H

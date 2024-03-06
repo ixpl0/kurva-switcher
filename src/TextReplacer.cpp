@@ -1,11 +1,59 @@
 ﻿#include "../include/TextReplacer.h"
 #include <windows.h>
-#include <string>
 #include <unordered_map>
-#include <algorithm>
 #include <unordered_set>
 
-std::wstring transformText(const std::wstring& originalText);
+bool isMostlyFirstLanguage(const std::wstring& originalText, const std::wstring& chars1, const std::wstring& chars2) {
+    int count1 = 0, count2 = 0;
+
+    std::unordered_set<wchar_t> rusSet(chars1.begin(), chars1.end());
+    std::unordered_set<wchar_t> engSet(chars2.begin(), chars2.end());
+
+    for (wchar_t ch : originalText) {
+        if (rusSet.count(ch)) count1++;
+        if (engSet.count(ch)) count2++;
+    }
+
+    return count1 > count2;
+}
+
+std::wstring transformText(const std::wstring& originalText) {
+    std::wstring chars1 = L"йцукенгшщзхъфывапролджэячсмитьбюёЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮЁ\"№;:?.,/";
+    std::wstring chars2 = L"qwertyuiop[]asdfghjkl;'zxcvbnm,.`QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>~@#$^&/?|";
+
+    bool isFirstCharset = isMostlyFirstLanguage(originalText, chars1, chars2);
+
+    std::unordered_map<wchar_t, wchar_t> charMap;
+    const std::wstring& fromChars = isFirstCharset ? chars1 : chars2;
+    const std::wstring& toChars = isFirstCharset ? chars2 : chars1;
+
+    for (size_t i = 0; i < fromChars.length(); ++i) {
+        charMap[fromChars[i]] = toChars[i];
+    }
+
+    std::wstring result;
+    for (const wchar_t& ch : originalText) {
+        auto it = charMap.find(ch);
+        if (it != charMap.end()) {
+            result += it->second;
+        }
+        else {
+            result += ch;
+        }
+    }
+
+    return result;
+}
+
+void releaseModifierKeys() {
+    keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+}
+
+bool isKeyPressed(int VK_CODE) {
+    return (GetKeyState(VK_CODE) & 0x8000) != 0;
+}
 
 void TextReplacer::replaceSelectedText() {
     if (OpenClipboard(nullptr)) {
@@ -21,6 +69,10 @@ void TextReplacer::replaceSelectedText() {
         }
         CloseClipboard();
 
+        bool ctrlPressed = isKeyPressed(VK_CONTROL);
+        bool shiftPressed = isKeyPressed(VK_SHIFT);
+        bool altPressed = isKeyPressed(VK_MENU);
+        releaseModifierKeys();
         // copy text
         keybd_event(VK_CONTROL, 0, 0, 0);
         keybd_event('C', 0, 0, 0);
@@ -63,6 +115,16 @@ void TextReplacer::replaceSelectedText() {
         keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
         Sleep(50);
 
+        if (ctrlPressed) {
+            keybd_event(VK_CONTROL, 0, 0, 0);
+        }
+        if (shiftPressed) {
+            keybd_event(VK_SHIFT, 0, 0, 0);
+        }
+        if (altPressed) {
+            keybd_event(VK_MENU, 0, 0, 0);
+        }
+
         // restore initial clipboard
         if (OpenClipboard(nullptr)) {
             EmptyClipboard();
@@ -78,47 +140,4 @@ void TextReplacer::replaceSelectedText() {
             CloseClipboard();
         }
     }
-}
-
-bool isMostlyFirstLanguage(const std::wstring& originalText, const std::wstring& chars1, const std::wstring& chars2) {
-    int count1 = 0, count2 = 0;
-
-    std::unordered_set<wchar_t> rusSet(chars1.begin(), chars1.end());
-    std::unordered_set<wchar_t> engSet(chars2.begin(), chars2.end());
-
-    for (wchar_t ch : originalText) {
-        if (rusSet.count(ch)) count1++;
-        if (engSet.count(ch)) count2++;
-    }
-
-    return count1 > count2;
-}
-
-
-std::wstring transformText(const std::wstring& originalText) {
-    std::wstring chars1 = L"йцукенгшщзхъфывапролджэячсмитьбюёЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮЁ\"№;:?.,/";
-    std::wstring chars2 = L"qwertyuiop[]asdfghjkl;'zxcvbnm,.`QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>~@#$^&/?|";
-
-    bool isFirstCharset = isMostlyFirstLanguage(originalText, chars1, chars2);
-
-    std::unordered_map<wchar_t, wchar_t> charMap;
-    const std::wstring& fromChars = isFirstCharset ? chars1 : chars2;
-    const std::wstring& toChars = isFirstCharset ? chars2 : chars1;
-
-    for (size_t i = 0; i < fromChars.length(); ++i) {
-        charMap[fromChars[i]] = toChars[i];
-    }
-
-    std::wstring result;
-    for (const wchar_t& ch : originalText) {
-        auto it = charMap.find(ch);
-        if (it != charMap.end()) {
-            result += it->second;
-        }
-        else {
-            result += ch;
-        }
-    }
-
-    return result;
 }
