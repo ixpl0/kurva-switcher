@@ -1,4 +1,4 @@
-<img src="kurva.ico" alt="kurva-bober face logo" height="120">
+﻿<img src="kurva.ico" alt="kurva-bober face logo" height="120">
 
 # kurva-switcher
 
@@ -20,16 +20,16 @@ Originally developed for personal use, the author created it due to a lack of tr
 - **Languages**  
   Toggle between English and Russian.
 
-## Plans
+## Future plans
 
 - **New languages**  
   Support for additional languages will be added in future releases.
 
-- **Future macOS support**  
-  Upcoming releases will include support for macOS, broadening the range of compatible devices.
+- **MacOS support**  
+  Upcoming releases will include support for macOS.
 
 - **Installer for autostart configuration**  
   A dedicated installer for convenient autostart setup will be available soon.
 
 > **Important Notice:**  
-> The author is an experienced front-end developer and not a C++ expert. That's why contributions are highly appreciated!
+> The author is an experienced front-end developer and not a C++ expert. That's why contributions are highly appreciated! 🐸
