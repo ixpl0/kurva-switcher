@@ -10,7 +10,11 @@ public:
     void replaceSelectedText();
 private:
     void releaseModifierKeys() const;
-    bool isKeyPressed(int VK_CODE) const;
+    void pressCtrlC() const;
+    void pressCtrlV() const;
+    std::wstring getTextFromClipboard() const;
+    bool isKeyPressed(int VK_CODE);
+    void copyToClipboard(const std::wstring& text);
     std::wstring transformText(const std::wstring& originalText) const;
     bool isMostlyFirstLanguage(
         const std::wstring& word,

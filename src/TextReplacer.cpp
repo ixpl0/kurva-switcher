@@ -3,7 +3,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-// Проверка, больше ли символов из первой раскладки
 bool TextReplacer::isMostlyFirstLanguage(
     const std::wstring& word,
     const std::unordered_set<wchar_t>& set1,
@@ -17,7 +16,6 @@ bool TextReplacer::isMostlyFirstLanguage(
     return count1 > count2;
 }
 
-// Трансформация слова согласно карте символов
 std::wstring TextReplacer::transformWord(
     const std::wstring& word,
     const std::unordered_map<wchar_t, wchar_t>& charMap
@@ -30,7 +28,6 @@ std::wstring TextReplacer::transformWord(
     return result;
 }
 
-// Трансформация текста: обработка раскладки
 std::wstring TextReplacer::transformText(const std::wstring& originalText) const {
     std::wstring chars1 = L"йцукенгшщзхъфывапролджэячсмитьбюёЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮЁ\"№;:?.,/";
     std::wstring chars2 = L"qwertyuiop[]asdfghjkl;'zxcvbnm,.`QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>~@#$^&/?|";
@@ -39,12 +36,14 @@ std::wstring TextReplacer::transformText(const std::wstring& originalText) const
     std::unordered_set<wchar_t> engSet(chars2.begin(), chars2.end());
 
     std::unordered_map<wchar_t, wchar_t> rusToEng, engToRus;
+
     for (size_t i = 0; i < chars1.size(); ++i) {
         rusToEng[chars1[i]] = chars2[i];
         engToRus[chars2[i]] = chars1[i];
     }
 
-    std::wstring result, word;
+	std::wstring result, word;
+
     for (wchar_t ch : originalText) {
         if (rusSet.count(ch) || engSet.count(ch)) {
             word += ch;
@@ -58,73 +57,121 @@ std::wstring TextReplacer::transformText(const std::wstring& originalText) const
             result += ch;
         }
     }
+
     if (!word.empty()) {
         bool isRus = isMostlyFirstLanguage(word, rusSet, engSet);
         result += transformWord(word, isRus ? rusToEng : engToRus);
     }
+
     return result;
 }
 
-// Сброс нажатых модификаторов
 void TextReplacer::releaseModifierKeys() const {
     keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
     keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
     keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
 }
 
-// Проверка нажатия клавиши
-bool TextReplacer::isKeyPressed(int VK_CODE) const {
+void TextReplacer::pressCtrlC() const {
+    keybd_event(VK_CONTROL, 0, 0, 0);
+    keybd_event('C', 0, 0, 0);
+    keybd_event('C', 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+}
+
+void TextReplacer::pressCtrlV() const {
+    keybd_event(VK_CONTROL, 0, 0, 0);
+    keybd_event('V', 0, 0, 0);
+    keybd_event('V', 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+}
+
+std::wstring TextReplacer::getTextFromClipboard() const {
+    if (!OpenClipboard(nullptr)) {
+        return L"";
+    }
+
+    HANDLE hOriginalClipboardData = GetClipboardData(CF_UNICODETEXT);
+    std::wstring originalClipboardText;
+
+    if (hOriginalClipboardData) {
+        wchar_t* pchOriginalData = static_cast<wchar_t*>(GlobalLock(hOriginalClipboardData));
+
+        if (pchOriginalData) {
+            originalClipboardText = pchOriginalData;
+            GlobalUnlock(hOriginalClipboardData);
+        }
+    }
+
+    CloseClipboard();
+
+    return originalClipboardText;
+}
+
+bool TextReplacer::isKeyPressed(int VK_CODE) {
     return (GetKeyState(VK_CODE) & 0x8000) != 0;
 }
 
-// Основной метод замены выделенного текста
-void TextReplacer::replaceSelectedText() {
-    if (OpenClipboard(nullptr)) {
-        HANDLE hOriginalClipboardData = GetClipboardData(CF_UNICODETEXT);
-        std::wstring originalClipboardText;
-        if (hOriginalClipboardData) {
-            wchar_t* pchOriginalData = static_cast<wchar_t*>(GlobalLock(hOriginalClipboardData));
-            if (pchOriginalData) {
-                originalClipboardText = pchOriginalData;
-                GlobalUnlock(hOriginalClipboardData);
-            }
-        }
-        CloseClipboard();
-
-        releaseModifierKeys();
-
-        // Копируем текст
-        keybd_event(VK_CONTROL, 0, 0, 0);
-        keybd_event('C', 0, 0, 0);
-        keybd_event('C', 0, KEYEVENTF_KEYUP, 0);
-        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-        Sleep(50);
-
-        if (OpenClipboard(nullptr)) {
-            HANDLE hClipboardData = GetClipboardData(CF_UNICODETEXT);
-            if (hClipboardData) {
-                wchar_t* pchData = static_cast<wchar_t*>(GlobalLock(hClipboardData));
-                if (pchData) {
-                    std::wstring clipboardText(pchData);
-                    GlobalUnlock(hClipboardData);
-
-                    if (originalClipboardText != clipboardText) {
-                        std::wstring transformedText = transformText(clipboardText);
-
-                        EmptyClipboard();
-                        HGLOBAL hNewClipboardData = GlobalAlloc(GMEM_DDESHARE, (transformedText.size() + 1) * sizeof(wchar_t));
-                        if (hNewClipboardData) {
-                            wchar_t* pNewClipboardData = static_cast<wchar_t*>(GlobalLock(hNewClipboardData));
-                            if (pNewClipboardData) {
-                                wcscpy_s(pNewClipboardData, transformedText.size() + 1, transformedText.c_str());
-                                GlobalUnlock(hNewClipboardData);
-                                SetClipboardData(CF_UNICODETEXT, hNewClipboardData);
-                            }
-                        }
-                    }
-                }
-            }
-            CloseClipboard();
-        }
+void TextReplacer::copyToClipboard(const std::wstring& text) {
+    if (text.empty()) {
+        return;
     }
+
+    size_t size = (text.length() + 1) * sizeof(wchar_t);
+    
+    if (!OpenClipboard(nullptr)) {
+        return;
+    }
+
+    EmptyClipboard();
+    
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, size);
+    if (!hMem) {
+        CloseClipboard();
+        return;
+    }
+
+    void* ptr = GlobalLock(hMem);
+    memcpy(ptr, text.c_str(), size);
+    GlobalUnlock(hMem); 
+    SetClipboardData(CF_UNICODETEXT, hMem);
+    CloseClipboard();
+}
+
+void TextReplacer::replaceSelectedText() {
+    std::wstring initialClipboardText = getTextFromClipboard();
+
+    bool isCtrlPressed = isKeyPressed(VK_CONTROL);
+    bool isShiftPressed = isKeyPressed(VK_SHIFT);
+    bool isAltPressed = isKeyPressed(VK_MENU);
+
+	releaseModifierKeys();
+    pressCtrlC();
+    Sleep(50);
+
+    std::wstring copiedClipboardText = getTextFromClipboard();
+
+    if (initialClipboardText == copiedClipboardText) {
+        return;
+    }
+
+    std::wstring transformedText = transformText(copiedClipboardText);
+
+    copyToClipboard(transformedText);
+    pressCtrlV();
+    Sleep(50);
+
+    if (isCtrlPressed) {
+        keybd_event(VK_CONTROL, 0, 0, 0);
+    }
+
+    if (isShiftPressed) {
+        keybd_event(VK_SHIFT, 0, 0, 0);
+    }
+
+    if (isAltPressed) {
+        keybd_event(VK_MENU, 0, 0, 0);
+    }
+
+    copyToClipboard(initialClipboardText);
 }

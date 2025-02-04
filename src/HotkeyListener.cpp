@@ -1,5 +1,5 @@
 #include "../include/HotkeyListener.h"
-#include <iostream>
+#include <windows.h>
 
 HotkeyListener::HotkeyListener()
     : hotkeyId1(1), hotkeyId2(2), registered1(false), registered2(false) {
@@ -19,7 +19,11 @@ bool HotkeyListener::initialize() {
 }
 
 bool HotkeyListener::isHotkeyPressed(MSG& msg) const {
-    return (msg.message == WM_HOTKEY && (msg.wParam == hotkeyId1 || msg.wParam == hotkeyId2));
+    if (msg.message == WM_HOTKEY) {
+        return (msg.wParam == hotkeyId1 || msg.wParam == hotkeyId2);
+    }
+
+    return false;
 }
 
 void HotkeyListener::unregisterHotkey(int hotkeyId) const {
@@ -31,6 +35,7 @@ void HotkeyListener::unregisterAllHotkeys() {
         unregisterHotkey(hotkeyId1);
         registered1 = false;
     }
+
     if (registered2) {
         unregisterHotkey(hotkeyId2);
         registered2 = false;
@@ -39,12 +44,18 @@ void HotkeyListener::unregisterAllHotkeys() {
 
 bool HotkeyListener::registerHotkey(int hotkeyId, UINT fsModifiers, UINT vk, const std::string& hotkeyName) {
     if (RegisterHotKey(NULL, hotkeyId, fsModifiers, vk)) {
-        if (hotkeyId == hotkeyId1) registered1 = true;
-        if (hotkeyId == hotkeyId2) registered2 = true;
+        if (hotkeyId == hotkeyId1) {
+            registered1 = true;
+        }
+
+        if (hotkeyId == hotkeyId2) {
+            registered2 = true;
+        }
+
         return true;
     }
     else {
-        std::cerr << "Unable to register " << hotkeyName << " hotkey." << std::endl;
         return false;
     }
 }
+

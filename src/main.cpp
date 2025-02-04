@@ -40,6 +40,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             POINT pt;
             GetCursorPos(&pt);
             HMENU hMenu = CreatePopupMenu();
+
             if (hMenu) {
                 InsertMenu(hMenu, 0, MF_BYPOSITION | MF_STRING, ID_EXIT, "Exit");
                 SetForegroundWindow(hWnd);
@@ -60,6 +61,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
+
     return 0;
 }
 
@@ -75,6 +77,7 @@ bool setupWindow(HINSTANCE hInstance) {
     }
 
     hWnd = CreateWindowEx(0, WINDOW_CLASS_NAME, "", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hInstance, NULL);
+
     if (!hWnd) {
         MessageBox(NULL, "Failed to create window.", "Error", MB_ICONERROR);
         return false;
@@ -99,6 +102,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     MSG msg = { 0 };
+
     while (running && GetMessage(&msg, NULL, 0, 0)) {
         if (hotkeyListener.isHotkeyPressed(msg)) {
             textReplacer.replaceSelectedText();
