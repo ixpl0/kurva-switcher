@@ -8,6 +8,7 @@
 class TextReplacer {
 public:
     void replaceSelectedText();
+
 private:
     void releaseModifierKeys() const;
     void pressCtrlC() const;
@@ -16,11 +17,13 @@ private:
     bool isKeyPressed(int VK_CODE);
     void copyToClipboard(const std::wstring& text);
     std::wstring transformText(const std::wstring& originalText) const;
+
     bool isMostlyFirstLanguage(
         const std::wstring& word,
         const std::unordered_set<wchar_t>& set1,
         const std::unordered_set<wchar_t>& set2
     ) const;
+
     std::wstring transformWord(
         const std::wstring& word,
         const std::unordered_map<wchar_t, wchar_t>& charMap

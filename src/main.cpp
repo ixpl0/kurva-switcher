@@ -67,6 +67,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 bool setupWindow(HINSTANCE hInstance) {
     WNDCLASS wc = { 0 };
+
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = WINDOW_CLASS_NAME;
@@ -114,5 +115,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     removeTrayIcon();
+
     return (int)msg.wParam;
 }
