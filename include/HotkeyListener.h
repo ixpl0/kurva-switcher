@@ -2,6 +2,7 @@
 #define HOTKEYLISTENER_H
 
 #include <windows.h>
+#include <string>
 
 class HotkeyListener {
 public:
@@ -13,6 +14,9 @@ public:
     bool isHotkeyPressed(MSG& msg) const;
 
 private:
+    void unregisterAllHotkeys();
+    bool registerHotkey(int hotkeyId, UINT fsModifiers, UINT vk, const std::string& hotkeyName);
+
     int hotkeyId1;
     int hotkeyId2;
     bool registered1;
