@@ -1,8 +1,9 @@
 #include "../include/HotkeyListener.h"
 #include <windows.h>
+#include <algorithm>
 
 HotkeyListener::HotkeyListener()
-    : hotkeyId1(1), hotkeyId2(2), registered1(false), registered2(false) {
+    : hotkeyIds{1, 2}, registered{false, false} {
 }
 
 HotkeyListener::~HotkeyListener() {
@@ -11,51 +12,38 @@ HotkeyListener::~HotkeyListener() {
 
 bool HotkeyListener::initialize() {
     bool success = true;
-
-    success &= registerHotkey(hotkeyId1, MOD_SHIFT, VK_PAUSE, "Shift+Pause");
-    success &= registerHotkey(hotkeyId2, 0, VK_PAUSE, "Pause");
-
+    success &= registerHotkey(hotkeyIds[0], MOD_SHIFT, VK_PAUSE, "Shift+Pause");
+    success &= registerHotkey(hotkeyIds[1], 0, VK_PAUSE, "Pause");
     return success;
 }
 
-bool HotkeyListener::isHotkeyPressed(MSG& msg) const {
+bool HotkeyListener::isHotkeyPressed(const MSG& msg) const {
     if (msg.message == WM_HOTKEY) {
-        return (msg.wParam == hotkeyId1 || msg.wParam == hotkeyId2);
+        const auto id = static_cast<int>(msg.wParam);
+        return std::find(hotkeyIds.begin(), hotkeyIds.end(), id) != hotkeyIds.end();
     }
-
     return false;
 }
 
-void HotkeyListener::unregisterHotkey(int hotkeyId) const {
-    UnregisterHotKey(NULL, hotkeyId);
-}
-
 void HotkeyListener::unregisterAllHotkeys() {
-    if (registered1) {
-        unregisterHotkey(hotkeyId1);
-        registered1 = false;
-    }
-
-    if (registered2) {
-        unregisterHotkey(hotkeyId2);
-        registered2 = false;
+    for (size_t i = 0; i < HOTKEY_COUNT; ++i) {
+        if (registered[i]) {
+            UnregisterHotKey(nullptr, hotkeyIds[i]);
+            registered[i] = false;
+        }
     }
 }
 
 bool HotkeyListener::registerHotkey(int hotkeyId, UINT fsModifiers, UINT vk, const std::string& hotkeyName) {
-    if (RegisterHotKey(NULL, hotkeyId, fsModifiers, vk)) {
-        if (hotkeyId == hotkeyId1) {
-            registered1 = true;
+    if (RegisterHotKey(nullptr, hotkeyId, fsModifiers, vk)) {
+        for (size_t i = 0; i < HOTKEY_COUNT; ++i) {
+            if (hotkeyIds[i] == hotkeyId) {
+                registered[i] = true;
+                break;
+            }
         }
-
-        if (hotkeyId == hotkeyId2) {
-            registered2 = true;
-        }
-
         return true;
     }
-    else {
-        return false;
-    }
+    return false;
 }
 

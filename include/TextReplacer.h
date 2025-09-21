@@ -4,9 +4,18 @@
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
+#include <memory>
 
 class TextReplacer {
 public:
+    TextReplacer();
+    ~TextReplacer() = default;
+
+    TextReplacer(const TextReplacer&) = delete;
+    TextReplacer& operator=(const TextReplacer&) = delete;
+    TextReplacer(TextReplacer&&) = delete;
+    TextReplacer& operator=(TextReplacer&&) = delete;
+
     void replaceSelectedText();
 
 private:
@@ -14,8 +23,8 @@ private:
     void pressCtrlC() const;
     void pressCtrlV() const;
     std::wstring getTextFromClipboard() const;
-    bool isKeyPressed(int VK_CODE);
-    void copyToClipboard(const std::wstring& text);
+    bool isKeyPressed(int vkCode) const;
+    void copyToClipboard(const std::wstring& text) const;
     std::wstring transformText(const std::wstring& originalText) const;
 
     bool isMostlyFirstLanguage(
@@ -28,6 +37,13 @@ private:
         const std::wstring& word,
         const std::unordered_map<wchar_t, wchar_t>& charMap
     ) const;
+
+    void initializeCharacterMaps();
+
+    std::unordered_set<wchar_t> russianChars;
+    std::unordered_set<wchar_t> englishChars;
+    std::unordered_map<wchar_t, wchar_t> rusToEng;
+    std::unordered_map<wchar_t, wchar_t> engToRus;
 };
 
 #endif // TEXTREPLACER_H
