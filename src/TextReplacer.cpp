@@ -2,7 +2,10 @@
 #include <windows.h>
 #include <UIAutomation.h>
 #include <wrl/client.h>
+#include <Ole2.h>
 #include <OleAuto.h>
+#include <memory>
+#include <utility>
 #include <unordered_map>
 #include <unordered_set>
 #include <chrono>
@@ -11,6 +14,159 @@
 #include <string_view>
 #include <algorithm>
 #include <vector>
+
+namespace {
+class ClipboardBackup {
+public:
+    ClipboardBackup() = default;
+    explicit ClipboardBackup(IDataObject* dataObject) {
+        capture(dataObject);
+    }
+
+    ClipboardBackup(const ClipboardBackup&) = delete;
+    ClipboardBackup& operator=(const ClipboardBackup&) = delete;
+
+    ClipboardBackup(ClipboardBackup&&) noexcept = default;
+    ClipboardBackup& operator=(ClipboardBackup&&) noexcept = default;
+
+    ~ClipboardBackup() {
+        clear();
+    }
+
+    bool empty() const noexcept {
+        return entries_.empty();
+    }
+
+    bool restore() noexcept {
+        if (entries_.empty()) {
+            return false;
+        }
+
+        if (!OpenClipboard(nullptr)) {
+            return false;
+        }
+
+        struct ClipboardCloser {
+            ~ClipboardCloser() {
+                CloseClipboard();
+            }
+        } closer;
+
+        if (!EmptyClipboard()) {
+            return false;
+        }
+
+        bool success = true;
+        for (auto& entry : entries_) {
+            if (!entry.handle) {
+                continue;
+            }
+
+            if (!SetClipboardData(entry.format, entry.handle)) {
+                success = false;
+                releaseHandle(entry.tymed, entry.handle);
+                entry.handle = nullptr;
+            } else {
+                entry.handle = nullptr;
+            }
+        }
+
+        return success;
+    }
+
+private:
+    struct Entry {
+        CLIPFORMAT format{ 0 };
+        DWORD tymed{ TYMED_NULL };
+        HANDLE handle{ nullptr };
+    };
+
+    std::vector<Entry> entries_;
+
+    void capture(IDataObject* dataObject) {
+        if (!dataObject) {
+            return;
+        }
+
+        Microsoft::WRL::ComPtr<IEnumFORMATETC> enumerator;
+        if (FAILED(dataObject->EnumFormatEtc(DATADIR_GET, &enumerator))) {
+            return;
+        }
+
+        FORMATETC format{};
+        ULONG fetched = 0;
+        while (enumerator->Next(1, &format, &fetched) == S_OK) {
+            STGMEDIUM medium{};
+            const HRESULT hr = dataObject->GetData(&format, &medium);
+
+            if (format.ptd) {
+                CoTaskMemFree(format.ptd);
+                format.ptd = nullptr;
+            }
+
+            if (FAILED(hr)) {
+                continue;
+            }
+
+            Entry entry{};
+            entry.format = format.cfFormat;
+            entry.tymed = medium.tymed;
+            entry.handle = duplicateMedium(medium, format.cfFormat);
+
+            ReleaseStgMedium(&medium);
+
+            if (entry.handle) {
+                entries_.push_back(entry);
+            }
+        }
+    }
+
+    static HANDLE duplicateMedium(const STGMEDIUM& medium, CLIPFORMAT format) {
+        switch (medium.tymed) {
+        case TYMED_HGLOBAL:
+            return OleDuplicateData(medium.hGlobal, format, 0);
+        case TYMED_GDI:
+            return OleDuplicateData(medium.hBitmap, format, 0);
+        case TYMED_ENHMF:
+            return OleDuplicateData(medium.hEnhMetaFile, format, 0);
+        case TYMED_MFPICT:
+            return OleDuplicateData(medium.hMetaFilePict, format, 0);
+        default:
+            return nullptr;
+        }
+    }
+
+    static void releaseHandle(DWORD tymed, HANDLE handle) noexcept {
+        if (!handle) {
+            return;
+        }
+
+        switch (tymed) {
+        case TYMED_HGLOBAL:
+        case TYMED_MFPICT:
+            GlobalFree(handle);
+            break;
+        case TYMED_GDI:
+            DeleteObject(static_cast<HGDIOBJ>(handle));
+            break;
+        case TYMED_ENHMF:
+            DeleteEnhMetaFile(static_cast<HENHMETAFILE>(handle));
+            break;
+        default:
+            break;
+        }
+    }
+
+    void clear() noexcept {
+        for (auto& entry : entries_) {
+            if (entry.handle) {
+                releaseHandle(entry.tymed, entry.handle);
+            }
+        }
+        entries_.clear();
+    }
+};
+} // namespace
 
 TextReplacer::TextReplacer() {
     initializeCharacterMaps();
@@ -207,10 +363,6 @@ bool TextReplacer::isKeyPressed(int vkCode) const {
 }
 
 void TextReplacer::copyToClipboard(const std::wstring& text) const {
-    if (text.empty()) {
-        return;
-    }
-
     const size_t size = (text.length() + 1) * sizeof(wchar_t);
 
     if (!OpenClipboard(nullptr)) {
@@ -269,6 +421,63 @@ void TextReplacer::replaceSelectedText() {
         }
     };
 
+    struct ScopedOleInitializer {
+        HRESULT hr{ E_FAIL };
+        bool shouldUninitialize{ false };
+
+        ScopedOleInitializer() {
+            hr = OleInitialize(nullptr);
+            if (hr == RPC_E_CHANGED_MODE) {
+                hr = S_OK;
+            } else if (SUCCEEDED(hr)) {
+                shouldUninitialize = true;
+            }
+        }
+
+        ~ScopedOleInitializer() {
+            if (shouldUninitialize) {
+                OleUninitialize();
+            }
+        }
+    } oleInitializer;
+
+    std::unique_ptr<ClipboardBackup> clipboardBackup;
+    Microsoft::WRL::ComPtr<IDataObject> originalClipboardData;
+    if (SUCCEEDED(oleInitializer.hr)) {
+        Microsoft::WRL::ComPtr<IDataObject> dataObject;
+        if (SUCCEEDED(OleGetClipboard(dataObject.GetAddressOf()))) {
+            auto backup = std::make_unique<ClipboardBackup>(dataObject.Get());
+            if (backup && !backup->empty()) {
+                clipboardBackup = std::move(backup);
+            } else {
+                originalClipboardData = std::move(dataObject);
+            }
+        }
+    }
+
+    bool clipboardRestored = false;
+    const auto restoreClipboard = [&]() {
+        if (clipboardRestored) {
+            return;
+        }
+        clipboardRestored = true;
+
+        bool restored = false;
+
+        if (clipboardBackup && clipboardBackup->restore()) {
+            restored = true;
+            clipboardBackup.reset();
+        } else if (originalClipboardData) {
+            if (SUCCEEDED(OleSetClipboard(originalClipboardData.Get()))) {
+                restored = true;
+            }
+        }
+
+        if (!restored) {
+            copyToClipboard(initialClipboardText);
+        }
+    };
+
     std::wstring selectedText = getSelectedTextViaUIAutomation();
 
     if (selectedText.empty()) {
@@ -279,7 +488,7 @@ void TextReplacer::replaceSelectedText() {
         selectedText = getTextFromClipboard();
         if (initialClipboardText == selectedText) {
             restoreModifiers();
-            copyToClipboard(initialClipboardText);
+            restoreClipboard();
             return;
         }
     } else {
@@ -293,5 +502,5 @@ void TextReplacer::replaceSelectedText() {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     restoreModifiers();
-    copyToClipboard(initialClipboardText);
+    restoreClipboard();
 }
