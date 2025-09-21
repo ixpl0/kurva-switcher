@@ -26,6 +26,7 @@ private:
     bool isKeyPressed(int vkCode) const;
     void copyToClipboard(const std::wstring& text) const;
     std::wstring transformText(const std::wstring& originalText) const;
+    std::wstring getSelectedTextViaUIAutomation() const;
 
     bool isMostlyFirstLanguage(
         const std::wstring& word,

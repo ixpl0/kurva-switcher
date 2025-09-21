@@ -1,5 +1,8 @@
 #include "../include/TextReplacer.h"
 #include <windows.h>
+#include <UIAutomation.h>
+#include <wrl/client.h>
+#include <OleAuto.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <chrono>
@@ -88,6 +91,79 @@ std::wstring TextReplacer::transformText(const std::wstring& originalText) const
     return result;
 }
 
+std::wstring TextReplacer::getSelectedTextViaUIAutomation() const {
+    struct ScopedCoInitializer {
+        HRESULT hr{ S_OK };
+        bool shouldUninitialize{ false };
+
+        ScopedCoInitializer() {
+            hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+            if (hr == RPC_E_CHANGED_MODE) {
+                hr = S_OK;
+            } else if (SUCCEEDED(hr)) {
+                shouldUninitialize = true;
+            }
+        }
+
+        ~ScopedCoInitializer() {
+            if (shouldUninitialize) {
+                CoUninitialize();
+            }
+        }
+    } initializer;
+
+    if (FAILED(initializer.hr)) {
+        return L"";
+    }
+
+    Microsoft::WRL::ComPtr<IUIAutomation> automation;
+    if (FAILED(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(automation.GetAddressOf()))) || !automation) {
+        return L"";
+    }
+
+    Microsoft::WRL::ComPtr<IUIAutomationElement> focusedElement;
+    if (FAILED(automation->GetFocusedElement(focusedElement.GetAddressOf())) || !focusedElement) {
+        return L"";
+    }
+
+    Microsoft::WRL::ComPtr<IUIAutomationTextPattern> textPattern;
+    if (SUCCEEDED(focusedElement->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(textPattern.GetAddressOf()))) && textPattern) {
+        Microsoft::WRL::ComPtr<IUIAutomationTextRangeArray> selection;
+        if (SUCCEEDED(textPattern->GetSelection(selection.GetAddressOf())) && selection) {
+            int selectionLength = 0;
+            if (SUCCEEDED(selection->get_Length(&selectionLength)) && selectionLength > 0) {
+                Microsoft::WRL::ComPtr<IUIAutomationTextRange> range;
+                if (SUCCEEDED(selection->GetElement(0, range.GetAddressOf())) && range) {
+                    BSTR text = nullptr;
+                    if (SUCCEEDED(range->GetText(-1, &text)) && text) {
+                        std::wstring result(text, SysStringLen(text));
+                        SysFreeString(text);
+                        return result;
+                    }
+                    if (text) {
+                        SysFreeString(text);
+                    }
+                }
+            }
+        }
+    }
+
+    Microsoft::WRL::ComPtr<IUIAutomationValuePattern> valuePattern;
+    if (SUCCEEDED(focusedElement->GetCurrentPatternAs(UIA_ValuePatternId, IID_PPV_ARGS(valuePattern.GetAddressOf()))) && valuePattern) {
+        BSTR value = nullptr;
+        if (SUCCEEDED(valuePattern->get_CurrentValue(&value)) && value) {
+            std::wstring result(value, SysStringLen(value));
+            SysFreeString(value);
+            return result;
+        }
+        if (value) {
+            SysFreeString(value);
+        }
+    }
+
+    return L"";
+}
+
 void TextReplacer::releaseModifierKeys() const {
     constexpr BYTE modifierKeys[] = { VK_CONTROL, VK_SHIFT, VK_MENU };
     for (const BYTE key : modifierKeys) {
@@ -163,37 +239,59 @@ void TextReplacer::copyToClipboard(const std::wstring& text) const {
 void TextReplacer::replaceSelectedText() {
     const std::wstring initialClipboardText = getTextFromClipboard();
 
-    const bool isCtrlPressed = isKeyPressed(VK_CONTROL);
-    const bool isShiftPressed = isKeyPressed(VK_SHIFT);
-    const bool isAltPressed = isKeyPressed(VK_MENU);
+    const bool wasCtrlPressed = isKeyPressed(VK_CONTROL);
+    const bool wasShiftPressed = isKeyPressed(VK_SHIFT);
+    const bool wasAltPressed = isKeyPressed(VK_MENU);
 
-    releaseModifierKeys();
-    pressCtrlC();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    bool modifiersReleased = false;
+    const auto ensureModifiersReleased = [&]() {
+        if (!modifiersReleased) {
+            releaseModifierKeys();
+            modifiersReleased = true;
+        }
+    };
 
-    const std::wstring copiedClipboardText = getTextFromClipboard();
+    const auto restoreModifiers = [&]() {
+        if (!modifiersReleased) {
+            return;
+        }
 
-    if (initialClipboardText == copiedClipboardText) {
-        return;
+        if (wasCtrlPressed) {
+            keybd_event(VK_CONTROL, 0, 0, 0);
+        }
+
+        if (wasShiftPressed) {
+            keybd_event(VK_SHIFT, 0, 0, 0);
+        }
+
+        if (wasAltPressed) {
+            keybd_event(VK_MENU, 0, 0, 0);
+        }
+    };
+
+    std::wstring selectedText = getSelectedTextViaUIAutomation();
+
+    if (selectedText.empty()) {
+        ensureModifiersReleased();
+        pressCtrlC();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        selectedText = getTextFromClipboard();
+        if (initialClipboardText == selectedText) {
+            restoreModifiers();
+            copyToClipboard(initialClipboardText);
+            return;
+        }
+    } else {
+        ensureModifiersReleased();
     }
 
-    const std::wstring transformedText = transformText(copiedClipboardText);
+    const std::wstring transformedText = transformText(selectedText);
 
     copyToClipboard(transformedText);
     pressCtrlV();
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    if (isCtrlPressed) {
-        keybd_event(VK_CONTROL, 0, 0, 0);
-    }
-
-    if (isShiftPressed) {
-        keybd_event(VK_SHIFT, 0, 0, 0);
-    }
-
-    if (isAltPressed) {
-        keybd_event(VK_MENU, 0, 0, 0);
-    }
-
+    restoreModifiers();
     copyToClipboard(initialClipboardText);
 }
