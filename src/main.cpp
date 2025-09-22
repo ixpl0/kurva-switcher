@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <shellapi.h>
 #include <string>
 #include <memory>
 #include "../include/HotkeyListener.h"
@@ -23,6 +24,11 @@ void setupTrayIcon(HINSTANCE hInstance) {
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
     nid.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
+    
+    // Use default application icon if custom icon loading fails
+    if (!nid.hIcon) {
+        nid.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    }
 
     const size_t tooltipLength = strlen(TOOLTIP_TEXT);
     if (tooltipLength < sizeof(nid.szTip)) {

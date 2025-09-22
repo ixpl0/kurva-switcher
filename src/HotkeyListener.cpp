@@ -34,13 +34,13 @@ void HotkeyListener::unregisterAllHotkeys() {
     }
 }
 
-bool HotkeyListener::registerHotkey(int hotkeyId, UINT fsModifiers, UINT vk, const std::string& hotkeyName) {
+bool HotkeyListener::registerHotkey(int hotkeyId, UINT fsModifiers, UINT vk, const std::string& /*hotkeyName*/) {
     if (RegisterHotKey(nullptr, hotkeyId, fsModifiers, vk)) {
-        for (size_t i = 0; i < HOTKEY_COUNT; ++i) {
-            if (hotkeyIds[i] == hotkeyId) {
-                registered[i] = true;
-                break;
-            }
+        // Find the index more efficiently using iterators
+        const auto it = std::find(hotkeyIds.begin(), hotkeyIds.end(), hotkeyId);
+        if (it != hotkeyIds.end()) {
+            const size_t index = static_cast<size_t>(std::distance(hotkeyIds.begin(), it));
+            registered[index] = true;
         }
         return true;
     }
