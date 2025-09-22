@@ -296,9 +296,6 @@ std::wstring TextReplacer::getSelectedTextViaUIAutomation() const {
                         SysFreeString(text);
                         return result;
                     }
-                    if (text) {
-                        SysFreeString(text);
-                    }
                 }
             }
         }
@@ -311,9 +308,6 @@ std::wstring TextReplacer::getSelectedTextViaUIAutomation() const {
             std::wstring result(value, SysStringLen(value));
             SysFreeString(value);
             return result;
-        }
-        if (value) {
-            SysFreeString(value);
         }
     }
 
@@ -377,7 +371,8 @@ void TextReplacer::copyToClipboard(const std::wstring& text) const {
         return;
     }
 
-    if (void* ptr = GlobalLock(hMem)) {
+    void* ptr = GlobalLock(hMem);
+    if (ptr) {
         memcpy(ptr, text.c_str(), size);
         GlobalUnlock(hMem);
         SetClipboardData(CF_UNICODETEXT, hMem);
