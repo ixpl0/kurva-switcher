@@ -304,19 +304,6 @@ std::wstring TextReplacer::getSelectedTextViaUIAutomation() const {
         }
     }
 
-    Microsoft::WRL::ComPtr<IUIAutomationValuePattern> valuePattern;
-    if (SUCCEEDED(focusedElement->GetCurrentPatternAs(UIA_ValuePatternId, IID_PPV_ARGS(valuePattern.GetAddressOf()))) && valuePattern) {
-        BSTR value = nullptr;
-        if (SUCCEEDED(valuePattern->get_CurrentValue(&value)) && value) {
-            std::wstring result(value, SysStringLen(value));
-            SysFreeString(value);
-            return result;
-        }
-        if (value) {
-            SysFreeString(value);
-        }
-    }
-
     return L"";
 }
 
