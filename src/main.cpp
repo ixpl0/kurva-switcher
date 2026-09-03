@@ -6,6 +6,7 @@
 
 #include <array>
 #include <optional>
+#include <string>
 
 #include "Log.h"
 #include "Settings.h"
@@ -66,6 +67,7 @@ private:
     void addTrayIcon();
     void removeTrayIcon();
     void showTrayMenu();
+    void toggleRunAtStartup();
 
     HINSTANCE instance_;
     HWND window_ = nullptr;
@@ -111,6 +113,7 @@ bool App::initialize() {
     }
 
     addTrayIcon();
+    settings::repairAutostart();  // The build was moved or replaced since autostart was enabled.
     return true;
 }
 
@@ -249,15 +252,36 @@ void App::showTrayMenu() {
         break;
     }
     case kMenuRunAtStartup:
-        if (!settings::setRunAtStartup(!settings::runAtStartup())) {
-            MessageBoxW(window_, L"Could not update the startup setting in the registry.", kAppTitle, MB_ICONWARNING);
-        }
+        toggleRunAtStartup();
         break;
     case kMenuExit:
         PostQuitMessage(0);
         break;
     default:
         break;
+    }
+}
+
+void App::toggleRunAtStartup() {
+    if (settings::runAtStartup()) {
+        if (!settings::setRunAtStartup(false)) {
+            MessageBoxW(window_, L"Could not remove the startup entry from the registry.", kAppTitle, MB_ICONWARNING);
+        }
+        return;
+    }
+
+    const std::wstring path = settings::executablePath();
+    if (settings::isTemporaryLocation(path)) {
+        MessageBoxW(window_,
+                    (L"kurva-switcher is running from a temporary folder:\n" + path +
+                     L"\n\nWindows would not find it there after a restart. Move the executable to a "
+                     L"permanent folder, start it from there and enable autostart again.")
+                        .c_str(),
+                    kAppTitle, MB_ICONWARNING);
+        return;
+    }
+    if (!settings::setRunAtStartup(true)) {
+        MessageBoxW(window_, L"Could not write the startup entry to the registry.", kAppTitle, MB_ICONWARNING);
     }
 }
 
