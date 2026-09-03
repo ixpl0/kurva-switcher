@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <objbase.h>  // Must precede the UI Automation headers when WIN32_LEAN_AND_MEAN is defined.
 #include <uiautomation.h>
 #include <wrl/client.h>
 

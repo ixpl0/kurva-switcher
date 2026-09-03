@@ -264,7 +264,8 @@ void TextSwitcher::run() {
     };
 
     std::wstring text;
-    HWND ownerAfterCopy = nullptr;  // Set when Ctrl+C replaced the user's clipboard content.
+    bool clipboardHoldsSelection = false;  // Ctrl+C replaced the user's clipboard content.
+    HWND ownerAfterCopy = nullptr;         // Who owned the clipboard right after that copy.
     if (selection.status == Selection::Status::Text) {
         text = std::move(selection.text);
     } else if (selection.status == Selection::Status::Empty && selection.emptyIsTrusted) {
@@ -289,6 +290,7 @@ void TextSwitcher::run() {
         case CopyResult::Outcome::Copied:
             break;
         }
+        clipboardHoldsSelection = true;
         ownerAfterCopy = copied.owner;
         if (copied.text.empty()) {
             log::info(L"Ctrl+C put no text on the clipboard; restoring it");
@@ -303,7 +305,7 @@ void TextSwitcher::run() {
     const Conversion conversion = converter_.convert(text);
     if (!conversion.changed) {
         log::info(L"the selection has nothing to convert");
-        if (backup_.captured()) {
+        if (clipboardHoldsSelection) {
             restoreClipboard(ownerAfterCopy);
         }
         return;
@@ -314,11 +316,17 @@ void TextSwitcher::run() {
         log::info(L"giving up: the clipboard is not available");
         return;
     }
-    if (!publish(conversion.text)) {
-        if (ownerAfterCopy) {
+    switch (publish(conversion.text)) {
+    case PublishResult::NotTouched:
+        if (clipboardHoldsSelection) {
             restoreClipboard(ownerAfterCopy);
         }
         return;
+    case PublishResult::Emptied:
+        restoreClipboard(nullptr);
+        return;
+    case PublishResult::Published:
+        break;
     }
     releaseModifiersOnce();
     if (!input::sendCtrlChord('V')) {
@@ -390,15 +398,15 @@ TextSwitcher::CopyResult TextSwitcher::copySelectionWithCtrlC() {
     return result;
 }
 
-bool TextSwitcher::publish(const std::wstring& text) {
+TextSwitcher::PublishResult TextSwitcher::publish(const std::wstring& text) {
     const clipboard::Lock lock(window_, kClipboardOpenTimeout);
     if (!lock.isOpen()) {
         log::info(L"paste: cannot open the clipboard to publish the converted text");
-        return false;
+        return PublishResult::NotTouched;
     }
     if (!EmptyClipboard()) {
         log::info(L"paste: EmptyClipboard failed (error {})", GetLastError());
-        return false;
+        return PublishResult::NotTouched;
     }
 
     published_ = text;
@@ -415,12 +423,12 @@ bool TextSwitcher::publish(const std::wstring& text) {
         log::info(L"paste: SetClipboardData(CF_UNICODETEXT, delayed) failed (error {})", GetLastError());
         published_.clear();
         ownsClipboard_ = false;
-        return false;
+        return PublishResult::Emptied;
     }
     // The converted text is a transient; keep it out of Win+V and the cloud clipboard.
     clipboard::addHistoryOptOut();
     log::info(L"paste: published {} character(s) with delayed rendering", text.size());
-    return true;
+    return PublishResult::Published;
 }
 
 void TextSwitcher::waitForPaste() {

@@ -69,7 +69,8 @@ private:
 
     [[nodiscard]] Target captureTarget(DWORD focusedProcessId) const;
     [[nodiscard]] CopyResult copySelectionWithCtrlC();
-    [[nodiscard]] bool publish(const std::wstring& text);
+    enum class PublishResult { NotTouched, Emptied, Published };
+    [[nodiscard]] PublishResult publish(const std::wstring& text);
     void waitForPaste();
     void restoreClipboard(HWND requiredOwner);
     void switchKeyboardLayout(const Target& target, Layout layout) const;

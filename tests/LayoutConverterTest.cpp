@@ -81,6 +81,7 @@ int main() {
     expectConversion("shifted digits back", L"\"№;:?", L"@#$^&", Layout::Latin);
     expectConversion("slash keys", L"/|?", L"./,", Layout::Cyrillic);
     expectConversion("quotes", L"\"ghbdtn\"", L"ЭприветЭ", Layout::Cyrillic);
+    expectConversion("apostrophe", L"don't", L"вщтэе", Layout::Cyrillic);
     expectConversion("non-layout characters pass through", L"ghbdtn 🐸 (vbh)", L"привет 🐸 (мир)", Layout::Cyrillic);
 
     expectDominant("latin", L"hello", Layout::Latin);

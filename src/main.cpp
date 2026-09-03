@@ -302,6 +302,12 @@ LRESULT App::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         PostQuitMessage(0);
         return 0;
 
+    case WM_ENDSESSION:
+        if (wParam) {
+            PostQuitMessage(0);  // Log-off or shutdown: leave cleanly.
+        }
+        return 0;
+
     case WM_DESTROY:
         return 0;
 
