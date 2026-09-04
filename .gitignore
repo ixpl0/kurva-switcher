@@ -364,7 +364,6 @@ FodyWeavers.xsd
 
 # Claude Code configuration
 .claude/
-CLAUDE.md
 
 # Visual Studio Edit & Continue temporary folder
 enc_temp_folder/
