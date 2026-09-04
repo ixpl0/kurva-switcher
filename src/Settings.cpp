@@ -16,6 +16,7 @@ namespace {
 
 constexpr wchar_t kSettingsKey[] = L"Software\\kurva-switcher";
 constexpr wchar_t kSwitchLayoutValue[] = L"SwitchLayoutAfterConversion";
+constexpr wchar_t kHotkeyValue[] = L"Hotkey";  // See packHotkey().
 constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr wchar_t kRunValue[] = L"kurva-switcher";
 
@@ -84,6 +85,39 @@ bool switchLayoutAfterConversion() {
 void setSwitchLayoutAfterConversion(bool enabled) {
     const DWORD value = enabled ? 1 : 0;
     RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, kSwitchLayoutValue, REG_DWORD, &value, sizeof(value));
+}
+
+namespace {
+
+// One DWORD: the virtual key in the low byte, the MOD_* flags in the next one, and the
+// extended-key bit above them.
+constexpr DWORD kExtendedKeyBit = 1u << 16;
+
+DWORD packHotkey(const Hotkey& combination) {
+    return (combination.virtualKey & 0xFF) | ((combination.modifiers & 0xFF) << 8) |
+           (combination.extendedKey ? kExtendedKeyBit : 0);
+}
+
+Hotkey unpackHotkey(DWORD value) {
+    return Hotkey{.modifiers = (value >> 8) & (MOD_ALT | MOD_CONTROL | MOD_SHIFT | MOD_WIN),
+                  .virtualKey = value & 0xFF,
+                  .extendedKey = (value & kExtendedKeyBit) != 0};
+}
+
+}  // namespace
+
+Hotkey hotkey() {
+    const std::optional<DWORD> stored = readDword(kSettingsKey, kHotkeyValue);
+    if (!stored) {
+        return kDefaultHotkey;
+    }
+    const Hotkey result = unpackHotkey(*stored);
+    return result.empty() ? kDefaultHotkey : result;
+}
+
+void setHotkey(const Hotkey& combination) {
+    const DWORD value = packHotkey(combination);
+    RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, kHotkeyValue, REG_DWORD, &value, sizeof(value));
 }
 
 std::wstring executablePath() {

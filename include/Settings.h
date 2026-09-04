@@ -2,11 +2,17 @@
 
 #include <string>
 
+#include "Hotkey.h"
+
 namespace kurva::settings {
 
 // Stored under HKEY_CURRENT_USER\Software\kurva-switcher.
 [[nodiscard]] bool switchLayoutAfterConversion();
 void setSwitchLayoutAfterConversion(bool enabled);
+
+// The key combination that starts a conversion: Pause unless another one was chosen.
+[[nodiscard]] Hotkey hotkey();
+void setHotkey(const Hotkey& combination);
 
 // Windows autostart: the per-user Run key, so no installer or administrator rights are needed.
 struct Autostart {

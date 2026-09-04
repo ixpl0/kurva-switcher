@@ -4,11 +4,12 @@
 #include <shellapi.h>
 #include <strsafe.h>
 
-#include <array>
 #include <optional>
 #include <string>
 
 #include "DarkMode.h"
+#include "Hotkey.h"
+#include "HotkeyDialog.h"
 #include "Log.h"
 #include "Settings.h"
 #include "TextSwitcher.h"
@@ -30,7 +31,7 @@ constexpr UINT WM_TRAYICON = WM_APP + 1;
 constexpr UINT kTrayIconId = 1;
 
 enum MenuItem : UINT {
-    kMenuHint = 1000,
+    kMenuHotkey = 1000,
     kMenuSwitchLayout,
     kMenuRunAtStartup,
     kMenuExit,
@@ -40,16 +41,12 @@ UINT checkMark(bool checked) {
     return checked ? static_cast<UINT>(MF_CHECKED) : static_cast<UINT>(MF_UNCHECKED);
 }
 
-struct Hotkey {
-    int id;
-    UINT modifiers;
-    const wchar_t* name;
-};
-
-constexpr std::array<Hotkey, 2> kHotkeys{{
-    {1, 0, L"Pause"},
-    {2, MOD_SHIFT, L"Shift+Pause"},
-}};
+// Ids of the hotkeys registered with Windows. A combination without modifiers (Pause, F9...)
+// is registered a second time with Shift, so that text selected with Shift and the arrow keys
+// can be converted without letting go of Shift. One with Ctrl or Alt is not: Shift on top of
+// it may well be some other program's shortcut.
+constexpr int kHotkeyId = 1;
+constexpr int kShiftedHotkeyId = 2;
 
 class App {
 public:
@@ -67,9 +64,15 @@ private:
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
 
     bool createWindow();
-    int registerHotkeys();
+    bool registerHotkeys();
+    bool registerHotkey(int id, const Hotkey& hotkey) const;
     void unregisterHotkeys();
+    [[nodiscard]] std::wstring hotkeyDescription() const;
+    [[nodiscard]] std::wstring hotkeyFailureText() const;
+    void changeHotkey();
+    [[nodiscard]] NOTIFYICONDATAW trayIconData() const;
     void addTrayIcon();
+    void updateTrayTooltip();
     void removeTrayIcon();
     void showTrayMenu();
     void toggleRunAtStartup();
@@ -80,7 +83,10 @@ private:
     UINT taskbarCreatedMessage_ = 0;
     bool trayIconAdded_ = false;
     bool menuOpen_ = false;
-    std::array<bool, kHotkeys.size()> hotkeyRegistered_{};
+    Hotkey hotkey_ = kDefaultHotkey;
+    bool hotkeyRegistered_ = false;
+    bool shiftedHotkeyRegistered_ = false;
+    bool choosingHotkey_ = false;
     std::optional<TextSwitcher> switcher_;
 };
 
@@ -111,15 +117,12 @@ bool App::initialize() {
     }
     switcher_->setSwitchKeyboardLayout(settings::switchLayoutAfterConversion());
 
-    if (registerHotkeys() == 0) {
-        MessageBoxW(nullptr,
-                    L"Could not register the Pause hotkey.\n\n"
-                    L"Another program (Punto Switcher, for example) is probably using it.",
-                    kAppTitle, MB_ICONERROR);
-        return false;
-    }
-
+    hotkey_ = settings::hotkey();
     addTrayIcon();
+    if (!registerHotkeys()) {
+        // Keep running: the tray menu is the way to pick a combination that is free.
+        MessageBoxW(nullptr, hotkeyFailureText().c_str(), kAppTitle, MB_ICONWARNING);
+    }
     settings::repairAutostart();  // The build was moved or replaced since autostart was enabled.
     return true;
 }
@@ -157,39 +160,89 @@ bool App::createWindow() {
     return true;
 }
 
-int App::registerHotkeys() {
-    int registered = 0;
-    for (size_t index = 0; index < kHotkeys.size(); ++index) {
-        const Hotkey& hotkey = kHotkeys[index];
-        // MOD_NOREPEAT keeps a held-down key from firing the conversion again and again.
-        bool ok = RegisterHotKey(window_, hotkey.id, hotkey.modifiers | MOD_NOREPEAT, VK_PAUSE) != FALSE;
-        if (!ok) {
-            ok = RegisterHotKey(window_, hotkey.id, hotkey.modifiers, VK_PAUSE) != FALSE;
-        }
-        hotkeyRegistered_[index] = ok;
-        if (ok) {
-            ++registered;
-        } else {
-            log::info(L"hotkey: cannot register {} (error {})", hotkey.name, GetLastError());
-        }
+// Registers the configured combination (and its Shift variant, see kShiftedHotkeyId).
+// Returns whether the combination itself is registered; the variant is a bonus.
+bool App::registerHotkeys() {
+    unregisterHotkeys();
+    hotkeyRegistered_ = registerHotkey(kHotkeyId, hotkey_);
+    if (hotkey_.modifiers == 0) {
+        Hotkey shifted = hotkey_;
+        shifted.modifiers = MOD_SHIFT;
+        shiftedHotkeyRegistered_ = registerHotkey(kShiftedHotkeyId, shifted);
     }
-    return registered;
+    return hotkeyRegistered_;
+}
+
+bool App::registerHotkey(int id, const Hotkey& hotkey) const {
+    // MOD_NOREPEAT keeps a held-down key from firing the conversion again and again.
+    bool ok = RegisterHotKey(window_, id, hotkey.modifiers | MOD_NOREPEAT, hotkey.virtualKey) != FALSE;
+    if (!ok) {
+        ok = RegisterHotKey(window_, id, hotkey.modifiers, hotkey.virtualKey) != FALSE;
+    }
+    if (!ok) {
+        log::info(L"hotkey: cannot register {} (error {})", hotkey.name(), GetLastError());
+    }
+    return ok;
 }
 
 void App::unregisterHotkeys() {
-    for (size_t index = 0; index < kHotkeys.size(); ++index) {
-        if (hotkeyRegistered_[index]) {
-            UnregisterHotKey(window_, kHotkeys[index].id);
-            hotkeyRegistered_[index] = false;
-        }
+    if (hotkeyRegistered_) {
+        UnregisterHotKey(window_, kHotkeyId);
+        hotkeyRegistered_ = false;
+    }
+    if (shiftedHotkeyRegistered_) {
+        UnregisterHotKey(window_, kShiftedHotkeyId);
+        shiftedHotkeyRegistered_ = false;
     }
 }
 
-void App::addTrayIcon() {
+// "Pause or Shift+Pause", "Ctrl+Alt+K".
+std::wstring App::hotkeyDescription() const {
+    std::wstring text = hotkey_.name();
+    if (hotkey_.modifiers == 0) {
+        text += L" or Shift+" + hotkey_.name();
+    }
+    return text;
+}
+
+std::wstring App::hotkeyFailureText() const {
+    return L"Could not register the hotkey " + hotkey_.name() +
+           L".\n\nAnother program (Punto Switcher, for example) is probably using it. Right-click the frog "
+           L"in the notification area and choose \"Hotkey\" to pick another combination.";
+}
+
+void App::changeHotkey() {
+    if (choosingHotkey_) {
+        hotkeydialog::focus();
+        return;
+    }
+    choosingHotkey_ = true;
+    // While the dialog is open the current combination must reach its field as ordinary keys.
+    unregisterHotkeys();
+    if (const std::optional<Hotkey> chosen = hotkeydialog::ask(instance_, window_, hotkey_)) {
+        hotkey_ = *chosen;
+        settings::setHotkey(hotkey_);
+        updateTrayTooltip();
+        log::info(L"hotkey: now {}", hotkey_.name());
+    }
+    choosingHotkey_ = false;
+    if (!registerHotkeys()) {
+        MessageBoxW(window_, hotkeyFailureText().c_str(), kAppTitle, MB_ICONWARNING);
+    }
+}
+
+NOTIFYICONDATAW App::trayIconData() const {
     NOTIFYICONDATAW data{};
     data.cbSize = sizeof(data);
     data.hWnd = window_;
     data.uID = kTrayIconId;
+    StringCchCopyW(data.szTip, ARRAYSIZE(data.szTip),
+                   (L"kurva-switcher\n" + hotkeyDescription() + L" converts the selected text").c_str());
+    return data;
+}
+
+void App::addTrayIcon() {
+    NOTIFYICONDATAW data = trayIconData();
     data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
     data.uCallbackMessage = WM_TRAYICON;
     // The notification area shows the icon at 16x16 (100% scaling), 20x20 (125%) and so on, but
@@ -201,8 +254,6 @@ void App::addTrayIcon() {
     const HICON icon = static_cast<HICON>(
         LoadImageW(instance_, MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE));
     data.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
-    StringCchCopyW(data.szTip, ARRAYSIZE(data.szTip),
-                   L"kurva-switcher\nPause or Shift+Pause converts the selected text");
 
     if (trayIconAdded_) {
         Shell_NotifyIconW(NIM_DELETE, &data);
@@ -217,14 +268,20 @@ void App::addTrayIcon() {
     }
 }
 
+void App::updateTrayTooltip() {
+    if (!trayIconAdded_) {
+        return;
+    }
+    NOTIFYICONDATAW data = trayIconData();
+    data.uFlags = NIF_TIP | NIF_SHOWTIP;
+    Shell_NotifyIconW(NIM_MODIFY, &data);
+}
+
 void App::removeTrayIcon() {
     if (!trayIconAdded_) {
         return;
     }
-    NOTIFYICONDATAW data{};
-    data.cbSize = sizeof(data);
-    data.hWnd = window_;
-    data.uID = kTrayIconId;
+    NOTIFYICONDATAW data = trayIconData();
     Shell_NotifyIconW(NIM_DELETE, &data);
     trayIconAdded_ = false;
 }
@@ -233,11 +290,15 @@ void App::showTrayMenu() {
     if (menuOpen_) {
         return;
     }
+    if (choosingHotkey_) {
+        hotkeydialog::focus();  // The dialog is modal: a tray click just brings it back.
+        return;
+    }
     const HMENU menu = CreatePopupMenu();
     if (!menu) {
         return;
     }
-    AppendMenuW(menu, MF_STRING | MF_GRAYED, kMenuHint, L"Pause / Shift+Pause: convert selected text");
+    AppendMenuW(menu, MF_STRING, kMenuHotkey, (L"Hotkey: " + hotkey_.name() + L"...").c_str());
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | checkMark(settings::switchLayoutAfterConversion()),
                 kMenuSwitchLayout, L"Switch keyboard layout after conversion");
@@ -258,6 +319,9 @@ void App::showTrayMenu() {
     DestroyMenu(menu);
 
     switch (chosen) {
+    case kMenuHotkey:
+        changeHotkey();
+        break;
     case kMenuSwitchLayout: {
         const bool enabled = !settings::switchLayoutAfterConversion();
         settings::setSwitchLayoutAfterConversion(enabled);

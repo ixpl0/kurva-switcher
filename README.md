@@ -12,8 +12,8 @@ Originally, the author developed it for personal use. This was due to a lack of 
 
 ## Functionality
 
-- **Hotkeys**  
-  Select text and press `Pause` or `Shift + Pause` to retype it in the other layout (customization planned).
+- **Hotkey**  
+  Select text and press `Pause` to retype it in the other layout. Any other combination can be chosen in the tray menu: *Hotkey: Pause...* opens a dialog with the usual Windows shortcut field, where you simply press the new one, `Ctrl + Alt + K` or `F9` for example. A single key such as `Pause` also works with `Shift` held down, so text selected with `Shift` and the arrow keys converts without letting go of `Shift`.
 
 - **Layout switching**  
   After a conversion the keyboard layout of the window switches to the language the text now belongs to, so you can just keep typing. Can be turned off in the tray menu.
@@ -22,7 +22,7 @@ Originally, the author developed it for personal use. This was due to a lack of 
   Whatever you had on the clipboard - text, images, files, formatted content - is still there after a conversion, and the converted text does not show up in the clipboard history (`Win + V`).
 
 - **Tray menu**  
-  Right-click the frog in the notification area to toggle layout switching, enable *Run at Windows startup*, or exit. The menu follows the light or dark app mode of Windows. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
+  Right-click the frog in the notification area to change the hotkey, toggle layout switching, enable *Run at Windows startup*, or exit. The menu follows the light or dark app mode of Windows. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
 
 - **Open source**  
   Build the application from source without relying on external binaries.
@@ -51,7 +51,7 @@ Each word of the selection is converted in the direction of its majority of char
 Known limitations:
 
 - Windows does not let a normal program send keystrokes to a program running **as administrator**. Run `kurva-switcher` as administrator too if you need conversions in such windows.
-- In applications that neither expose their selection nor use `Ctrl + C` for copying (some terminals, games), `Pause` sends a `Ctrl + C` that the application interprets its own way.
+- In applications that neither expose their selection nor use `Ctrl + C` for copying (some terminals, games), the hotkey sends a `Ctrl + C` that the application interprets its own way.
 - Applications that read the clipboard with more than a two second delay after `Ctrl + V` get the original clipboard content back.
 
 ## Building

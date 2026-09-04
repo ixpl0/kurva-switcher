@@ -66,7 +66,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>uiautomationcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>comctl32.lib;uiautomationcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -98,6 +98,8 @@
   <ItemGroup>
     <ClCompile Include="src\Clipboard.cpp" />
     <ClCompile Include="src\DarkMode.cpp" />
+    <ClCompile Include="src\Hotkey.cpp" />
+    <ClCompile Include="src\HotkeyDialog.cpp" />
     <ClCompile Include="src\Input.cpp" />
     <ClCompile Include="src\LayoutConverter.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -109,6 +111,8 @@
   <ItemGroup>
     <ClInclude Include="include\Clipboard.h" />
     <ClInclude Include="include\DarkMode.h" />
+    <ClInclude Include="include\Hotkey.h" />
+    <ClInclude Include="include\HotkeyDialog.h" />
     <ClInclude Include="include\Input.h" />
     <ClInclude Include="include\LayoutConverter.h" />
     <ClInclude Include="include\Log.h" />
