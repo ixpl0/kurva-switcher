@@ -22,7 +22,7 @@ Originally, the author developed it for personal use. This was due to a lack of 
   Whatever you had on the clipboard - text, images, files, formatted content - is still there after a conversion, and the converted text does not show up in the clipboard history (`Win + V`).
 
 - **Tray menu**  
-  Right-click the frog in the notification area to toggle layout switching, enable *Run at Windows startup*, or exit. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
+  Right-click the frog in the notification area to toggle layout switching, enable *Run at Windows startup*, or exit. The menu follows the light or dark app mode of Windows. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
 
 - **Open source**  
   Build the application from source without relying on external binaries.

@@ -1,5 +1,6 @@
 #include <windows.h>
 
+#include <commctrl.h>
 #include <objbase.h>
 #include <shellapi.h>
 #include <strsafe.h>
@@ -8,10 +9,16 @@
 #include <optional>
 #include <string>
 
+#include "DarkMode.h"
 #include "Log.h"
 #include "Settings.h"
 #include "TextSwitcher.h"
 #include "resource.h"
+
+// LoadIconMetric exists only in version 6 of the common controls, which a program gets by
+// declaring the dependency in its manifest. As a side effect the message boxes get the
+// current visual style instead of the classic one.
+#pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 namespace {
 
@@ -92,6 +99,8 @@ App::~App() {
 }
 
 bool App::initialize() {
+    darkmode::allowDarkMenus();  // Before any window or menu exists.
+
     if (!createWindow()) {
         MessageBoxW(nullptr, L"Failed to create the application window.", kAppTitle, MB_ICONERROR);
         return false;
@@ -185,12 +194,15 @@ void App::addTrayIcon() {
     data.uID = kTrayIconId;
     data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
     data.uCallbackMessage = WM_TRAYICON;
-    data.hIcon = static_cast<HICON>(LoadImageW(instance_, MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON,
-                                               GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
-                                               LR_DEFAULTCOLOR));
-    if (!data.hIcon) {
-        data.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    // The notification area wants a small icon: 16x16 at 100% scaling, 20x20 at 125% and so on.
+    // kurva.ico has nothing that small (its smallest image is 64x64), and LoadImage would shrink
+    // that one by dropping pixels; LoadIconMetric scales it down with a proper filter, so the
+    // frog stays smooth.
+    HICON icon = nullptr;
+    if (FAILED(LoadIconMetric(instance_, MAKEINTRESOURCEW(IDI_ICON1), LIM_SMALL, &icon))) {
+        icon = nullptr;
     }
+    data.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
     StringCchCopyW(data.szTip, ARRAYSIZE(data.szTip),
                    L"kurva-switcher\nPause or Shift+Pause converts the selected text");
 
@@ -201,6 +213,9 @@ void App::addTrayIcon() {
     if (trayIconAdded_) {
         data.uVersion = NOTIFYICON_VERSION_4;
         Shell_NotifyIconW(NIM_SETVERSION, &data);
+    }
+    if (icon) {
+        DestroyIcon(icon);  // The shell keeps its own copy.
     }
 }
 
@@ -331,6 +346,10 @@ LRESULT App::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             PostQuitMessage(0);  // Log-off or shutdown: leave cleanly.
         }
         return 0;
+
+    case WM_SETTINGCHANGE:
+        darkmode::handleSettingChange(lParam);  // Light/dark app mode switched while running.
+        return DefWindowProcW(window_, message, wParam, lParam);
 
     case WM_DESTROY:
         return 0;
