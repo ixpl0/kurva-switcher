@@ -1,6 +1,5 @@
 #include <windows.h>
 
-#include <commctrl.h>
 #include <objbase.h>
 #include <shellapi.h>
 #include <strsafe.h>
@@ -15,9 +14,8 @@
 #include "TextSwitcher.h"
 #include "resource.h"
 
-// LoadIconMetric exists only in version 6 of the common controls, which a program gets by
-// declaring the dependency in its manifest. As a side effect the message boxes get the
-// current visual style instead of the classic one.
+// Version 6 of the common controls: without it the message boxes are drawn in the classic
+// Windows 2000 style instead of the current visual style.
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 namespace {
@@ -194,14 +192,14 @@ void App::addTrayIcon() {
     data.uID = kTrayIconId;
     data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
     data.uCallbackMessage = WM_TRAYICON;
-    // The notification area wants a small icon: 16x16 at 100% scaling, 20x20 at 125% and so on.
-    // kurva.ico has nothing that small (its smallest image is 64x64), and LoadImage would shrink
-    // that one by dropping pixels; LoadIconMetric scales it down with a proper filter, so the
-    // frog stays smooth.
-    HICON icon = nullptr;
-    if (FAILED(LoadIconMetric(instance_, MAKEINTRESOURCEW(IDI_ICON1), LIM_SMALL, &icon))) {
-        icon = nullptr;
-    }
+    // The notification area shows the icon at 16x16 (100% scaling), 20x20 (125%) and so on, but
+    // asking Windows for that size ends badly: kurva.ico has nothing smaller than 64x64, and both
+    // LoadImage and LoadIconMetric (for the "standard" sizes 16, 32 and 48) shrink it by dropping
+    // pixels, which looks jagged. So load the large icon size instead (SM_CXICON, 32x32 at 100%),
+    // exactly as LoadIcon did in the old builds, and let the shell scale it down with its own,
+    // much better filter.
+    const HICON icon = static_cast<HICON>(
+        LoadImageW(instance_, MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE));
     data.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
     StringCchCopyW(data.szTip, ARRAYSIZE(data.szTip),
                    L"kurva-switcher\nPause or Shift+Pause converts the selected text");
