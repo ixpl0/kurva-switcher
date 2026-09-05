@@ -13,7 +13,7 @@ Originally, the author developed it for personal use. This was due to a lack of 
 ## Functionality
 
 - **Hotkey**  
-  Select text and press `Pause` to retype it in the other layout. Any other combination can be chosen in the tray menu: *Hotkey: Pause...* opens a dialog with the usual Windows shortcut field, where you simply press the new one, `Ctrl + Alt + K` or `F9` for example. A single key such as `Pause` also works with `Shift` held down, so text selected with `Shift` and the arrow keys converts without letting go of `Shift`.
+  Select text and press `Pause` to retype it in the other layout. Any other combination can be chosen in the tray menu: *Hotkey: Pause...* opens a dialog with a field where you simply press the new one, `Ctrl + Alt + K` or `F9` for example. A single key such as `Pause` also works with `Shift` held down, so text selected with `Shift` and the arrow keys converts without letting go of `Shift`.
 
 - **Layout switching**  
   After a conversion the keyboard layout of the window switches to the language the text now belongs to, so you can just keep typing. Can be turned off in the tray menu.

@@ -15,9 +15,15 @@ std::wstring keyName(const Hotkey& hotkey) {
     }
     // GetKeyNameText names a scan code rather than a virtual key, and tells Home from Num 7 by
     // the extended-key bit; both are packed the way WM_KEYDOWN packs them into its lParam.
-    LONG lParam = static_cast<LONG>(MapVirtualKeyW(key, MAPVK_VK_TO_VSC) << 16);
-    if (hotkey.extendedKey) {
-        lParam |= 1 << 24;
+    // MapVirtualKey has no scan code for Pause, whose E1 1D 45 sequence is missing from the
+    // layout tables; GetKeyNameText knows it as 0x45 without the extended bit (with the bit,
+    // 0x45 is Num Lock).
+    LONG lParam = 0x45 << 16;
+    if (key != VK_PAUSE) {
+        lParam = static_cast<LONG>(MapVirtualKeyW(key, MAPVK_VK_TO_VSC) << 16);
+        if (hotkey.extendedKey) {
+            lParam |= 1 << 24;
+        }
     }
     wchar_t buffer[64];
     if (GetKeyNameTextW(lParam, buffer, static_cast<int>(ARRAYSIZE(buffer))) > 0) {

@@ -4,6 +4,8 @@
 
 #include <commctrl.h>
 
+#include <string>
+
 #include "Log.h"
 #include "resource.h"
 
@@ -24,44 +26,8 @@ struct State {
     Hotkey chosen;
 };
 
-// The hot key control packs the virtual key into the low byte of a WORD and HOTKEYF_* flags
-// into the high one; RegisterHotKey wants MOD_* flags, which are numbered differently.
-WORD toControl(const Hotkey& hotkey) {
-    UINT flags = 0;
-    if (hotkey.modifiers & MOD_SHIFT) {
-        flags |= HOTKEYF_SHIFT;
-    }
-    if (hotkey.modifiers & MOD_CONTROL) {
-        flags |= HOTKEYF_CONTROL;
-    }
-    if (hotkey.modifiers & MOD_ALT) {
-        flags |= HOTKEYF_ALT;
-    }
-    if (hotkey.extendedKey) {
-        flags |= HOTKEYF_EXT;
-    }
-    return MAKEWORD(hotkey.virtualKey, flags);
-}
-
-Hotkey fromControl(WORD packed) {
-    const UINT flags = HIBYTE(packed);
-    Hotkey hotkey;
-    hotkey.virtualKey = LOBYTE(packed);
-    if (flags & HOTKEYF_SHIFT) {
-        hotkey.modifiers |= MOD_SHIFT;
-    }
-    if (flags & HOTKEYF_CONTROL) {
-        hotkey.modifiers |= MOD_CONTROL;
-    }
-    if (flags & HOTKEYF_ALT) {
-        hotkey.modifiers |= MOD_ALT;
-    }
-    hotkey.extendedKey = (flags & HOTKEYF_EXT) != 0;
-    return hotkey;
-}
-
 // Keys nobody types with, so taking them over on their own is fine. Any other key must come
-// with Ctrl or Alt, or the user could no longer type that character, or use Enter, Home...
+// with Ctrl, Alt or Win, or the user could no longer type that character, or use Enter, Home...
 bool isSpareKey(UINT virtualKey) {
     switch (virtualKey) {
     case VK_PAUSE:
@@ -89,13 +55,94 @@ const wchar_t* problem(const Hotkey& hotkey) {
     if (hotkey.empty()) {
         return L"Press the key combination first.";
     }
-    if (!(hotkey.modifiers & (MOD_CONTROL | MOD_ALT)) && !isSpareKey(hotkey.virtualKey)) {
+    if (!(hotkey.modifiers & (MOD_CONTROL | MOD_ALT | MOD_WIN)) && !isSpareKey(hotkey.virtualKey)) {
         return L"On its own this key is needed for ordinary typing. Add Ctrl or Alt to the combination.";
     }
     if (takenByAnotherProgram(hotkey)) {
         return L"Another program already uses this combination. Choose a different one.";
     }
     return nullptr;
+}
+
+// The field is an ordinary edit control that does not type: it shows the name of whatever
+// combination is pressed in it instead. The standard hot key control (msctls_hotkey32) would
+// be the obvious choice, but it names keys through MapVirtualKey, which has no answer for
+// Pause, so the one key this program is known for came out blank in it.
+
+bool isDown(int virtualKey) {
+    return (GetKeyState(virtualKey) & 0x8000) != 0;
+}
+
+void showHotkey(HWND field, const Hotkey& hotkey) {
+    const std::wstring text = hotkey.empty() ? std::wstring() : hotkey.name();
+    SetWindowTextW(field, text.c_str());
+    const auto end = static_cast<LPARAM>(text.size());
+    SendMessageW(field, EM_SETSEL, static_cast<WPARAM>(end), end);  // Caret after the text, nothing selected.
+}
+
+// Returns false for the few key presses the field leaves to Windows.
+bool captureKey(HWND field, State& state, UINT virtualKey, LPARAM lParam) {
+    switch (virtualKey) {
+    case VK_SHIFT:
+    case VK_CONTROL:
+    case VK_MENU:
+    case VK_LWIN:
+    case VK_RWIN:
+    case VK_PROCESSKEY:  // IME composition.
+    case VK_PACKET:      // Unicode characters injected by SendInput.
+        return true;     // A modifier on its own: wait for the key that goes with it.
+    default:
+        break;
+    }
+    Hotkey hotkey;
+    hotkey.virtualKey = virtualKey;
+    hotkey.extendedKey = (HIWORD(lParam) & KF_EXTENDED) != 0;
+    if (isDown(VK_CONTROL)) {
+        hotkey.modifiers |= MOD_CONTROL;
+    }
+    if (isDown(VK_SHIFT)) {
+        hotkey.modifiers |= MOD_SHIFT;
+    }
+    if (isDown(VK_MENU)) {
+        hotkey.modifiers |= MOD_ALT;
+    }
+    if (isDown(VK_LWIN) || isDown(VK_RWIN)) {
+        hotkey.modifiers |= MOD_WIN;
+    }
+    if (virtualKey == VK_F4 && hotkey.modifiers == MOD_ALT) {
+        return false;  // Still closes the dialog.
+    }
+    if (virtualKey == VK_BACK && hotkey.modifiers == 0) {
+        hotkey = Hotkey{};  // Backspace clears the field, as in the standard control.
+    }
+    state.chosen = hotkey;
+    showHotkey(field, hotkey);
+    return true;
+}
+
+LRESULT CALLBACK fieldProc(HWND field, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR refData) {
+    auto* state = reinterpret_cast<State*>(refData);
+    switch (message) {
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+        if (captureKey(field, *state, static_cast<UINT>(wParam), lParam)) {
+            return 0;
+        }
+        break;
+    case WM_CHAR:
+    case WM_SYSCHAR:
+    case WM_CONTEXTMENU:
+        return 0;  // No typing, no beep for Alt+letter, no Undo/Paste menu.
+    case WM_GETDLGCODE:
+        // Tab, Enter and Escape stay with the dialog; the text is not to be selected on focus.
+        return DefSubclassProc(field, message, wParam, lParam) & ~DLGC_HASSETSEL;
+    case WM_NCDESTROY:
+        RemoveWindowSubclass(field, fieldProc, 0);
+        break;
+    default:
+        break;
+    }
+    return DefSubclassProc(field, message, wParam, lParam);
 }
 
 // The user has just clicked the tray menu on some monitor; that is where the dialog belongs,
@@ -120,25 +167,25 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lPa
     switch (message) {
     case WM_INITDIALOG: {
         SetWindowLongPtrW(dialog, DWLP_USER, lParam);
-        const auto* state = reinterpret_cast<const State*>(lParam);
-        SendDlgItemMessageW(dialog, IDC_HOTKEY, HKM_SETHOTKEY, toControl(state->current), 0);
+        auto* state = reinterpret_cast<State*>(lParam);
+        const HWND field = GetDlgItem(dialog, IDC_HOTKEY);
+        SetWindowSubclass(field, fieldProc, 0, reinterpret_cast<DWORD_PTR>(state));
+        showHotkey(field, state->current);
         centerOnMouseMonitor(dialog);
         openDialog = dialog;
         ShowWindow(dialog, SW_SHOW);
         SetForegroundWindow(dialog);
-        return TRUE;  // The dialog manager then focuses the first control: the hot key field.
+        return TRUE;  // The dialog manager then focuses the first control: the field.
     }
 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDOK: {
-            const WORD packed = static_cast<WORD>(SendDlgItemMessageW(dialog, IDC_HOTKEY, HKM_GETHOTKEY, 0, 0));
-            const Hotkey chosen = fromControl(packed);
-            if (const wchar_t* why = problem(chosen)) {
+            const auto* state = reinterpret_cast<const State*>(GetWindowLongPtrW(dialog, DWLP_USER));
+            if (const wchar_t* why = problem(state->chosen)) {
                 MessageBoxW(dialog, why, kTitle, MB_ICONINFORMATION);
                 return TRUE;
             }
-            reinterpret_cast<State*>(GetWindowLongPtrW(dialog, DWLP_USER))->chosen = chosen;
             EndDialog(dialog, IDOK);
             return TRUE;
         }
@@ -161,11 +208,6 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lPa
 }  // namespace
 
 std::optional<Hotkey> ask(HINSTANCE instance, HWND owner, const Hotkey& current) {
-    INITCOMMONCONTROLSEX controls{};
-    controls.dwSize = sizeof(controls);
-    controls.dwICC = ICC_HOTKEY_CLASS;  // Registers msctls_hotkey32, the class the template names.
-    InitCommonControlsEx(&controls);
-
     State state{.current = current, .chosen = current};
     const INT_PTR result = DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_HOTKEY), owner, dialogProc,
                                            reinterpret_cast<LPARAM>(&state));
