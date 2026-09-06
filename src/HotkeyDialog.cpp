@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "DarkMode.h"
 #include "Dialogs.h"
 #include "Log.h"
 #include "resource.h"
@@ -150,6 +151,9 @@ LRESULT CALLBACK fieldProc(HWND field, UINT message, WPARAM wParam, LPARAM lPara
 }
 
 INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (const auto handled = darkmode::dialogMessage(dialog, message, wParam, lParam)) {
+        return *handled;
+    }
     switch (message) {
     case WM_INITDIALOG: {
         SetWindowLongPtrW(dialog, DWLP_USER, lParam);

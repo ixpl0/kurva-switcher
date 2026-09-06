@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Clipboard.h"
+#include "DarkMode.h"
 #include "Dialogs.h"
 #include "Log.h"
 #include "resource.h"
@@ -139,6 +140,9 @@ void layout(HWND dialog, const State& state) {
 }
 
 INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (const auto handled = darkmode::dialogMessage(dialog, message, wParam, lParam)) {
+        return *handled;
+    }
     auto* state = reinterpret_cast<State*>(GetWindowLongPtrW(dialog, DWLP_USER));
     switch (message) {
     case WM_INITDIALOG: {

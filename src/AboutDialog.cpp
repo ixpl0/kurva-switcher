@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <string>
 
+#include "DarkMode.h"
 #include "Dialogs.h"
 #include "Log.h"
 #include "Settings.h"
@@ -96,6 +97,9 @@ void showInFolder(const std::wstring& path) {
 }
 
 INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (const auto handled = darkmode::dialogMessage(dialog, message, wParam, lParam)) {
+        return *handled;
+    }
     auto* state = reinterpret_cast<State*>(GetWindowLongPtrW(dialog, DWLP_USER));
     switch (message) {
     case WM_INITDIALOG: {
