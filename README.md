@@ -16,7 +16,10 @@ Originally, the author developed it for personal use. This was due to a lack of 
   Select text and press `Pause` to retype it in the other layout. `Shift + Pause` does the same, so text selected with `Shift` and the arrow keys converts without letting go of `Shift`. Both combinations can be changed in the tray menu: *Hotkey: Pause...* and *Second hotkey: Shift+Pause...* open a dialog with a field where you simply press the new one, `Ctrl + Alt + K` or `F9` for example; `Backspace` clears the second one if a single hotkey is enough. When another program holds a combination (Punto Switcher, say), a notification names it, and `kurva-switcher` keeps trying every few seconds, so the hotkey becomes yours as soon as that program quits.
 
 - **Layout switching**  
-  After a conversion the keyboard layout of the window switches to the language the text now belongs to, so you can just keep typing. Can be turned off in the tray menu.
+  After a conversion the keyboard layout of the window switches to the one the text now belongs to, so you can just keep typing. Can be turned off in the tray menu.
+
+- **Any keyboard layouts**  
+  The characters to swap are not a built-in Russian/English table: `kurva-switcher` asks Windows what every key produces in each of the layouts you have installed, so Ukrainian, Belarusian, German, Dvorak or a typewriter variant of Russian work the same way, and so does the `₽` on `AltGr + 8`. With three or more layouts a word goes to the layout that is active in the window when the word was not typed in it (you have already switched to the one you meant), otherwise to the layout that changes it the most: a Cyrillic word becomes Latin rather than Ukrainian.
 
 - **Clipboard-friendly**  
   Whatever you had on the clipboard - text, images, files, formatted content - is still there after a conversion, and the converted text does not show up in the clipboard history (`Win + V`).
@@ -45,7 +48,7 @@ Punto-style utilities have to get the selected text out of another application a
 3. **Pasting.** The converted text is put on the clipboard with *delayed rendering*: Windows asks `kurva-switcher` for the data at the very moment the target application reads the clipboard for `Ctrl + V`. Only after that read (plus a short quiet period) is the original clipboard restored. If nobody reads it, the original is restored after two seconds.
 4. **Playing nice.** If some other program replaces the clipboard while all this happens, `kurva-switcher` does not overwrite it. Modifier keys held down for the hotkey are released before `Ctrl + C` / `Ctrl + V` is sent, so the application never sees `Ctrl + Shift + V`.
 
-Each word of the selection is converted in the direction of its majority of characters, so mixed text such as `hello ghbdtn` becomes `руддщ привет`. Punctuation that sits on different keys in the two layouts (`,` / `б`, `?` / `,`, `@` / `"`...) is converted along with the letters.
+What every key produces in every installed layout is asked from Windows itself ([ToUnicodeEx](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-tounicodeex)) when the program starts and again whenever the set of layouts changes; keys that produce the same character everywhere (digits, say) are ignored. Each word of the selection is attributed to the layout that produces most of its characters and retyped in the other one, so mixed text such as `hello ghbdtn` becomes `руддщ привет`. Punctuation that sits on different keys (`,` / `б`, `?` / `,`, `@` / `"`...) is converted along with the letters; a character the other layout cannot produce at all stays as it is.
 
 ### Troubleshooting
 
@@ -61,12 +64,9 @@ Known limitations:
 
 Open `kurva-switcher.sln` in Visual Studio 2022 (Desktop development with C++ workload) and build the `Release | x64` configuration. The executable lands in `x64\Release\kurva-switcher.exe`; it is portable, needs no installation and no Visual C++ Redistributable (the runtime is linked in). The `.pdb` next to it is for debugging only and need not be shipped. The version number comes from `include/Version.h`; it ends up in the file properties of the executable and in the About box.
 
-Every push is also built by [GitHub Actions](.github/workflows/build.yml); the workflow runs the unit tests for the conversion logic (`tests\LayoutConverterTest.cpp`) and publishes the executable as a build artifact.
+Every push is also built by [GitHub Actions](.github/workflows/build.yml); the workflow runs the unit tests for the conversion logic (`tests\LayoutConverterTest.cpp`) and for the reading of keyboard layouts from Windows (`tests\KeyboardLayoutsTest.cpp`), and publishes the executable as a build artifact.
 
 ## Future plans
-
-- **New languages**  
-  Support for additional languages will be added in future releases.
 
 - **macOS support**  
   Upcoming releases will include support for macOS.

@@ -110,6 +110,7 @@
     <ClCompile Include="src\Hotkey.cpp" />
     <ClCompile Include="src\HotkeyDialog.cpp" />
     <ClCompile Include="src\Input.cpp" />
+    <ClCompile Include="src\KeyboardLayouts.cpp" />
     <ClCompile Include="src\LayoutConverter.cpp" />
     <ClCompile Include="src\Log.cpp" />
     <ClCompile Include="src\LogDialog.cpp" />
@@ -128,6 +129,7 @@
     <ClInclude Include="include\Hotkey.h" />
     <ClInclude Include="include\HotkeyDialog.h" />
     <ClInclude Include="include\Input.h" />
+    <ClInclude Include="include\KeyboardLayouts.h" />
     <ClInclude Include="include\LayoutConverter.h" />
     <ClInclude Include="include\Log.h" />
     <ClInclude Include="include\LogDialog.h" />
@@ -148,6 +150,7 @@
   <ItemGroup>
     <None Include="README.md" />
     <None Include="tests\LayoutConverterTest.cpp" />
+    <None Include="tests\KeyboardLayoutsTest.cpp" />
     <None Include=".github\workflows\build.yml" />
     <None Include="tools\icon_frames.py" />
   </ItemGroup>

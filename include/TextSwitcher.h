@@ -3,10 +3,13 @@
 #include <windows.h>
 
 #include <chrono>
+#include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "Clipboard.h"
+#include "KeyboardLayouts.h"
 #include "LayoutConverter.h"
 #include "Selection.h"
 
@@ -28,6 +31,10 @@ namespace kurva {
 //     (WM_RENDERFORMAT) at the very moment the target reads the clipboard, so the original
 //     clipboard is restored only after the paste has actually been served;
 //   * if another application replaces the clipboard meanwhile, nothing is restored over it.
+//
+// The characters to swap come from the keyboard layouts installed in Windows, read again
+// whenever that set changes, so any pair of layouts converts and the keyboard layout of the
+// target window is switched to the exact layout the text now belongs to.
 class TextSwitcher {
 public:
     explicit TextSwitcher(HINSTANCE instance);
@@ -47,6 +54,7 @@ private:
     struct Target {
         HWND foreground = nullptr;
         HWND focus = nullptr;
+        HKL layout = nullptr;        // Keyboard layout of the focused window, if known.
         std::set<DWORD> processIds;  // Every process that may read the clipboard on Ctrl+V.
     };
 
@@ -73,13 +81,17 @@ private:
     [[nodiscard]] PublishResult publish(const std::wstring& text);
     void waitForPaste();
     void restoreClipboard(HWND requiredOwner);
-    void switchKeyboardLayout(const Target& target, Layout layout) const;
+    void refreshLayouts();
+    [[nodiscard]] std::optional<LayoutIndex> indexOf(HKL layout) const;
+    void switchKeyboardLayout(const Target& target, LayoutIndex layout) const;
 
     HINSTANCE instance_ = nullptr;
     HWND window_ = nullptr;
     bool classRegistered_ = false;
 
     SelectionReader selection_;
+    std::vector<keyboard::InstalledLayout> layouts_;  // What converter_ was built from.
+    bool layoutsRead_ = false;
     LayoutConverter converter_;
 
     bool busy_ = false;

@@ -42,15 +42,27 @@ there and rerun the script rather than editing the small frames.
   mkdir -p out && g++ -std=c++20 -Iinclude tests/LayoutConverterTest.cpp src/LayoutConverter.cpp -o out/LayoutConverterTest && out/LayoutConverterTest
   ```
 
-  Run it whenever you touch `LayoutConverter.*`. Everything else (clipboard,
-  UI Automation, hotkeys, tray, registry) can only be checked on Windows, so
-  say plainly what you could not verify instead of claiming it works.
+  Run it whenever you touch `LayoutConverter.*`. The characters themselves
+  come from Windows (`src/KeyboardLayouts.cpp`, `ToUnicodeEx`);
+  `tests/KeyboardLayoutsTest.cpp` checks them against the known US and
+  Russian layouts, but needs Windows (the `cl` line is in its header; the
+  workflow runs it). Everything else (clipboard, UI Automation, hotkeys,
+  tray, registry) can only be checked on Windows, so say plainly what you
+  could not verify instead of claiming it works.
+- **Sessions on the author's Windows machine.** Some sessions run locally
+  on the author's Windows PC instead of the Linux VM. Visual Studio is
+  installed there (`vswhere` finds it): build the solution with MSBuild
+  (`Release|x64`) and run both tests with `cl` from `vcvars64.bat` to check
+  your work. Still leave running `kurva-switcher.exe` to the author: it is
+  probably already running (a second copy only shows the "already running"
+  box), and it grabs global hotkeys.
 - **Keep the Visual Studio project in sync.** New, renamed or removed
   `.cpp`/`.h` files must be edited into `kurva-switcher.vcxproj` and
   `kurva-switcher.vcxproj.filters` by hand: there is no glob, and a missing
   entry only shows up when the author builds. Keep
   `tests/LayoutConverterTest.cpp` free of Windows-only headers so it keeps
-  compiling with both `cl` and `g++`.
+  compiling with both `cl` and `g++`; `tests/KeyboardLayoutsTest.cpp` is
+  Windows-only by nature.
 
 ## Finishing a task ("switch the Linux off")
 

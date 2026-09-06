@@ -1,5 +1,6 @@
 #include "TextSwitcher.h"
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -85,6 +86,7 @@ TextSwitcher::TextSwitcher(HINSTANCE instance) : instance_(instance) {
     // Wakes our waits up as soon as the clipboard changes; the decision itself is always
     // taken from the clipboard sequence number, never from this notification.
     AddClipboardFormatListener(window_);
+    refreshLayouts();
     log::info(L"switcher: ready (UI Automation {})", selection_.available() ? L"available" : L"unavailable");
 }
 
@@ -225,6 +227,9 @@ TextSwitcher::Target TextSwitcher::captureTarget(DWORD focusedProcessId) const {
             target.focus = FindWindowExW(target.foreground, nullptr, L"Windows.UI.Core.CoreWindow", nullptr);
         }
     }
+    if (const HWND layoutWindow = target.focus ? target.focus : target.foreground) {
+        target.layout = GetKeyboardLayout(GetWindowThreadProcessId(layoutWindow, nullptr));
+    }
     target.processIds.erase(GetCurrentProcessId());
     return target;
 }
@@ -242,6 +247,12 @@ void TextSwitcher::run() {
     const auto started = Clock::now();
     log::info(L"---- hotkey ----");
 
+    refreshLayouts();
+    if (converter_.layoutCount() < 2) {
+        log::info(L"giving up: there is no second keyboard layout to convert to");
+        return;
+    }
+
     published_.clear();
     ownsClipboard_ = false;
     clipboardTaken_ = false;
@@ -252,6 +263,13 @@ void TextSwitcher::run() {
     Selection selection = selection_.read();
     const Target target = captureTarget(selection.processId);
     targetProcessIds_ = target.processIds;
+    const std::optional<LayoutIndex> activeLayout = indexOf(target.layout);
+    if (activeLayout) {
+        log::info(L"target layout: {}", layouts_[*activeLayout].name);
+    } else {
+        log::info(L"target layout: {}", target.layout ? keyboard::name(target.layout) + L", not in the list"
+                                                      : std::wstring(L"unknown"));
+    }
 
     bool modifiersReleased = false;
     const auto releaseModifiersOnce = [&modifiersReleased] {
@@ -302,7 +320,7 @@ void TextSwitcher::run() {
     }
 
     // 3. Convert.
-    const Conversion conversion = converter_.convert(text);
+    const Conversion conversion = converter_.convert(text, activeLayout);
     if (!conversion.changed) {
         log::info(L"the selection has nothing to convert");
         if (clipboardHoldsSelection) {
@@ -338,8 +356,8 @@ void TextSwitcher::run() {
     restoreClipboard(window_);
 
     // 6. Continue typing in the layout the text now belongs to.
-    if (switchLayout_ && conversion.lastTarget != Layout::Unknown) {
-        switchKeyboardLayout(target, conversion.lastTarget);
+    if (switchLayout_ && conversion.lastTarget) {
+        switchKeyboardLayout(target, *conversion.lastTarget);
     }
     log::info(L"done in {} ms", millisecondsSince(started));
 }
@@ -463,37 +481,57 @@ void TextSwitcher::restoreClipboard(HWND requiredOwner) {
     }
 }
 
-void TextSwitcher::switchKeyboardLayout(const Target& target, Layout layout) const {
-    const WORD wantedLanguage = (layout == Layout::Cyrillic) ? LANG_RUSSIAN : LANG_ENGLISH;
-    const HWND window = target.focus ? target.focus : target.foreground;
-    if (!window) {
+// Reads the installed keyboard layouts again when the user added or removed one. Cheap when
+// nothing changed, so it runs on every hotkey.
+void TextSwitcher::refreshLayouts() {
+    const std::vector<HKL> installed = keyboard::installedLayouts();
+    const bool unchanged =
+        layoutsRead_ && installed.size() == layouts_.size() &&
+        std::equal(installed.begin(), installed.end(), layouts_.begin(),
+                   [](HKL handle, const keyboard::InstalledLayout& layout) { return handle == layout.handle; });
+    if (unchanged) {
         return;
     }
+    layoutsRead_ = true;
+    layouts_ = keyboard::describe(installed);
+    std::vector<LayoutChars> chars;
+    chars.reserve(layouts_.size());
+    for (const keyboard::InstalledLayout& layout : layouts_) {
+        chars.push_back(layout.chars);
+    }
+    converter_ = LayoutConverter(std::move(chars));
 
-    const DWORD threadId = GetWindowThreadProcessId(window, nullptr);
-    const HKL current = GetKeyboardLayout(threadId);
-    const auto languageOf = [](HKL layoutHandle) {
-        return PRIMARYLANGID(LOWORD(reinterpret_cast<ULONG_PTR>(layoutHandle)));
-    };
-    if (languageOf(current) == wantedLanguage) {
-        return;
+    std::wstring names;
+    for (const keyboard::InstalledLayout& layout : layouts_) {
+        names += (names.empty() ? L"" : L", ") + layout.name;
     }
+    log::info(L"layouts: {}", names.empty() ? std::wstring(L"none found") : names);
+    if (layouts_.size() < 2) {
+        log::info(L"layouts: nothing to convert to; add a second keyboard layout in Windows");
+    }
+}
 
-    const int count = GetKeyboardLayoutList(0, nullptr);
-    if (count <= 0) {
-        return;
-    }
-    std::vector<HKL> layouts(static_cast<size_t>(count));
-    const int fetched = GetKeyboardLayoutList(count, layouts.data());
-    for (int index = 0; index < fetched; ++index) {
-        const HKL candidate = layouts[static_cast<size_t>(index)];
-        if (languageOf(candidate) == wantedLanguage) {
-            PostMessageW(window, WM_INPUTLANGCHANGEREQUEST, 0, reinterpret_cast<LPARAM>(candidate));
-            log::info(L"layout: asked the target to switch to language {:#x}", wantedLanguage);
-            return;
+std::optional<LayoutIndex> TextSwitcher::indexOf(HKL layout) const {
+    for (size_t index = 0; index < layouts_.size(); ++index) {
+        if (layouts_[index].handle == layout) {
+            return index;
         }
     }
-    log::info(L"layout: no installed layout for language {:#x}", wantedLanguage);
+    return std::nullopt;
+}
+
+void TextSwitcher::switchKeyboardLayout(const Target& target, LayoutIndex layout) const {
+    const HWND window = target.focus ? target.focus : target.foreground;
+    if (!window || layout >= layouts_.size()) {
+        return;
+    }
+    const keyboard::InstalledLayout& wanted = layouts_[layout];
+    const DWORD threadId = GetWindowThreadProcessId(window, nullptr);
+    if (GetKeyboardLayout(threadId) == wanted.handle) {
+        return;
+    }
+    PostMessageW(window, WM_INPUTLANGCHANGEREQUEST, 0, reinterpret_cast<LPARAM>(wanted.handle));
+    log::info(L"layout: asked the target to switch to {}", wanted.name);
 }
 
 }  // namespace kurva
