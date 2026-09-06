@@ -15,7 +15,9 @@ the autostart `Run` entry only. The version number lives in
 the About dialog shows it. `Resource.rc` is UTF-16LE with a BOM and CRLF line
 endings; rewrite it with a script that keeps that encoding (plain `sed` or a
 heredoc turns it into UTF-8 and the resource compiler chokes). UI strings are
-English.
+English. `kurva.ico` is generated: `python tools/icon_frames.py kurva.ico`
+rebuilds every frame size from the 256x256 master frame, so change the art
+there and rerun the script rather than editing the small frames.
 
 ## Working agreement with the author
 

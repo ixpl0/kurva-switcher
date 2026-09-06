@@ -16,6 +16,9 @@
     <Filter Include="Tests">
       <UniqueIdentifier>{2F1C0C2B-6C8E-4C7A-9D3B-1E0B7F6A5D41}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Tools">
+      <UniqueIdentifier>{7A3E9C10-5B2D-4F61-8E4A-2C9D0B7F3A15}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\AboutDialog.cpp">
@@ -135,6 +138,9 @@
     <None Include=".github\workflows\build.yml" />
     <None Include="tests\LayoutConverterTest.cpp">
       <Filter>Tests</Filter>
+    </None>
+    <None Include="tools\icon_frames.py">
+      <Filter>Tools</Filter>
     </None>
   </ItemGroup>
 </Project>

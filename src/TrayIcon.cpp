@@ -16,12 +16,11 @@ namespace {
 constexpr UINT kIconId = 1;
 constexpr wchar_t kTitle[] = L"kurva-switcher";
 
-// The system tray shows the icon at 16x16 (100% scaling), 20x20 (125%) and so on, but
-// asking Windows for that size ends badly: kurva.ico has nothing smaller than 64x64, and both
-// LoadImage and LoadIconMetric (for the "standard" sizes 16, 32 and 48) shrink it by dropping
-// pixels, which looks jagged. So load the large icon size instead (SM_CXICON, 32x32 at 100%),
-// exactly as LoadIcon did in the old builds, and let the shell scale it down with its own,
-// much better filter.
+// The system tray shows the icon at 16x16 (100% scaling), 20x20 (125%) and so on. The icon is
+// loaded at the large size (SM_CXICON, 32x32 at 100%), which kurva.ico has as a frame of its
+// own, and the shell scales it down with its own filter, as LoadIcon did in the old builds.
+// (Those builds had no frame below 64x64, so asking for a small size meant a jagged shrink.
+// tools/icon_frames.py now produces every size, so a small frame could be asked for directly.)
 HICON loadIcon(HINSTANCE instance, bool& owned) {
     const HICON icon = static_cast<HICON>(
         LoadImageW(instance, MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE));

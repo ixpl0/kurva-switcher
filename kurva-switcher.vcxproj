@@ -149,6 +149,7 @@
     <None Include="README.md" />
     <None Include="tests\LayoutConverterTest.cpp" />
     <None Include=".github\workflows\build.yml" />
+    <None Include="tools\icon_frames.py" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
