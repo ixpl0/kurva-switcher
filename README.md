@@ -59,7 +59,7 @@ Known limitations:
 
 ## Building
 
-Open `kurva-switcher.sln` in Visual Studio 2022 (Desktop development with C++ workload) and build the `Release | x64` configuration. The executable lands in `x64\Release\kurva-switcher.exe`; it is portable and needs no installation. The version number comes from `include/Version.h`; it ends up in the file properties of the executable and in the About box.
+Open `kurva-switcher.sln` in Visual Studio 2022 (Desktop development with C++ workload) and build the `Release | x64` configuration. The executable lands in `x64\Release\kurva-switcher.exe`; it is portable, needs no installation and no Visual C++ Redistributable (the runtime is linked in). The `.pdb` next to it is for debugging only and need not be shipped. The version number comes from `include/Version.h`; it ends up in the file properties of the executable and in the About box.
 
 Every push is also built by [GitHub Actions](.github/workflows/build.yml); the workflow runs the unit tests for the conversion logic (`tests\LayoutConverterTest.cpp`) and publishes the executable as a build artifact.
 
