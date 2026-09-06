@@ -282,7 +282,7 @@ void App::announceConflict(const std::vector<std::wstring>& failed) {
     const std::wstring text = std::wstring(L"Could not register ") + (one ? L"the hotkey " : L"the hotkeys ") +
                               join(failed, L" and ") + L": another program (Punto Switcher, for example) uses " +
                               (one ? L"it" : L"them") +
-                              L". Right-click the frog to choose a different combination; meanwhile it is "
+                              L". Right-click the tray icon to choose a different combination; meanwhile it is "
                               L"retried every few seconds.";
     tray_->notify(L"kurva-switcher: hotkey conflict", text, TrayIcon::Notice::Warning);
 }
@@ -296,17 +296,17 @@ void App::welcome() {
         }
     }
     const std::wstring text =
-        names.empty() ? std::wstring(L"Right-click the frog in the notification area to choose a hotkey. Then select "
+        names.empty() ? std::wstring(L"Right-click the kurva-switcher icon in the system tray to choose a hotkey. Then select "
                                      L"text typed in the wrong layout and press it.")
                       : L"Select text typed in the wrong layout and press " + join(names, L" or ") +
-                            L" to retype it. Right-click the frog in the notification area for the settings.";
+                            L" to retype it. Right-click the kurva-switcher icon in the system tray for the settings.";
     tray_->notify(L"kurva-switcher is running", text, TrayIcon::Notice::Welcome);
 }
 
 // The second line of the tray tooltip.
 std::wstring App::status() const {
     if (!enabled_) {
-        return L"Disabled. Right-click the frog to enable it.";
+        return L"Disabled. Right-click to enable.";
     }
     std::vector<std::wstring> names;
     for (size_t slot = 0; slot < settings::kHotkeySlots; ++slot) {
@@ -315,7 +315,7 @@ std::wstring App::status() const {
         }
     }
     if (names.empty()) {
-        return L"No hotkey is registered. Right-click the frog to choose one.";
+        return L"No hotkey is registered. Right-click to choose one.";
     }
     return join(names, L" or ") + L" converts the selected text";
 }
@@ -565,7 +565,7 @@ struct ComScope {
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     const HANDLE singleInstance = CreateMutexW(nullptr, TRUE, kMutexName);
     if (singleInstance && GetLastError() == ERROR_ALREADY_EXISTS) {
-        MessageBoxW(nullptr, L"kurva-switcher is already running. Look for its icon in the notification area.",
+        MessageBoxW(nullptr, L"kurva-switcher is already running. Look for its icon in the system tray.",
                     kAppTitle, MB_ICONINFORMATION);
         CloseHandle(singleInstance);
         return 0;

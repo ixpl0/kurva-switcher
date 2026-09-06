@@ -73,7 +73,7 @@ int largestFrameUpTo(HINSTANCE instance, int wanted) {
     return best;
 }
 
-HICON loadFrog(HINSTANCE instance) {
+HICON loadLargeIcon(HINSTANCE instance) {
     // Twice the tray icon: 64 px at 100 % scaling.
     const int wanted = GetSystemMetrics(SM_CXICON) * 2;
     int size = largestFrameUpTo(instance, wanted);
@@ -101,7 +101,7 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lPa
     case WM_INITDIALOG: {
         SetWindowLongPtrW(dialog, DWLP_USER, lParam);
         state = reinterpret_cast<State*>(lParam);
-        state->icon = loadFrog(state->instance);
+        state->icon = loadLargeIcon(state->instance);
         if (state->icon) {
             SendDlgItemMessageW(dialog, IDC_ABOUT_ICON, STM_SETICON, reinterpret_cast<WPARAM>(state->icon), 0);
         }

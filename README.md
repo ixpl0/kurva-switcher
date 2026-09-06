@@ -22,7 +22,7 @@ Originally, the author developed it for personal use. This was due to a lack of 
   Whatever you had on the clipboard - text, images, files, formatted content - is still there after a conversion, and the converted text does not show up in the clipboard history (`Win + V`).
 
 - **Tray menu**  
-  Right-click the frog in the notification area to change the hotkeys, toggle layout switching, enable *Run at Windows startup*, open the log or the About box, or exit. Uncheck *Enabled* to switch the hotkeys off for a while, for a game or a virtual machine that wants `Pause` for itself: the frog shows inverted colors until you check it again. The menu follows the light or dark app mode of Windows. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
+  Right-click the kurva-switcher icon in the system tray to change the hotkeys, toggle layout switching, enable *Run at Windows startup*, open the log or the About box, or exit. Uncheck *Enabled* to switch the hotkeys off for a while, for a game or a virtual machine that wants `Pause` for itself: the icon shows inverted colors until you check it again. The menu follows the light or dark app mode of Windows. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
 
 - **Portable**  
   Settings live in `kurva-switcher.ini` next to the executable: copy the folder and they come along, delete it and nothing is left behind. If that folder cannot be written (`Program Files`, say), the file goes to `%LOCALAPPDATA%\kurva-switcher` instead; *About kurva-switcher...* in the tray menu shows which file is in use and opens it. The registry is touched only by the autostart entry, and only while it is enabled. Settings of older builds are moved out of the registry on the first start.
@@ -75,4 +75,4 @@ Every push is also built by [GitHub Actions](.github/workflows/build.yml); the w
   Currently, only the portable version is available; autostart can be enabled from the tray menu.
 
 > **Important Notice:**  
-> The author is an experienced front-end developer and not a C++ expert. That's why contributions are highly appreciated! 🐸
+> The author is an experienced front-end developer and not a C++ expert. That's why contributions are highly appreciated!

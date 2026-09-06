@@ -9,7 +9,7 @@
 
 namespace kurva {
 
-// The frog in the notification area: its icon, its tooltip and the notifications it pops up
+// The icon in the system tray: the image, the tooltip and the notifications it pops up
 // ("balloons"; toasts on Windows 10 and later).
 class TrayIcon {
 public:
@@ -21,7 +21,7 @@ public:
     TrayIcon(const TrayIcon&) = delete;
     TrayIcon& operator=(const TrayIcon&) = delete;
 
-    // Puts the icon in the notification area. Call again when Explorer restarts (TaskbarCreated):
+    // Puts the icon in the system tray. Call again when Explorer restarts (TaskbarCreated):
     // it forgets the icon then.
     bool add();
     void remove();

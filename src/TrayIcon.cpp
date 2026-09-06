@@ -16,7 +16,7 @@ namespace {
 constexpr UINT kIconId = 1;
 constexpr wchar_t kTitle[] = L"kurva-switcher";
 
-// The notification area shows the icon at 16x16 (100% scaling), 20x20 (125%) and so on, but
+// The system tray shows the icon at 16x16 (100% scaling), 20x20 (125%) and so on, but
 // asking Windows for that size ends badly: kurva.ico has nothing smaller than 64x64, and both
 // LoadImage and LoadIconMetric (for the "standard" sizes 16, 32 and 48) shrink it by dropping
 // pixels, which looks jagged. So load the large icon size instead (SM_CXICON, 32x32 at 100%),
@@ -29,7 +29,7 @@ HICON loadIcon(HINSTANCE instance, bool& owned) {
     return icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);  // Shared: not to be destroyed.
 }
 
-// A copy of the icon with every color inverted; the alpha channel, and so the frog's outline,
+// A copy of the icon with every color inverted; the alpha channel, and so the icon's outline,
 // stays as it is. nullptr when the icon's bitmaps cannot be read.
 HICON invertColors(HICON source) {
     ICONINFO info{};
@@ -185,7 +185,7 @@ void TrayIcon::notify(std::wstring_view title, std::wstring_view text, Notice no
     StringCchCopyNW(data.szInfo, ARRAYSIZE(data.szInfo), text.data(), text.size());
     switch (notice) {
     case Notice::Welcome:
-        data.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;  // The frog itself, large.
+        data.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;  // The program's own icon, large.
         data.hBalloonIcon = icon_;
         break;
     case Notice::Info:

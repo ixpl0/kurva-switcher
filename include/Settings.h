@@ -31,7 +31,7 @@ inline constexpr size_t kHotkeySlots = 2;
 [[nodiscard]] Hotkey hotkey(size_t slot);
 void setHotkey(size_t slot, const Hotkey& combination);
 
-// Whether the "running in the notification area" notice of the first start has been shown.
+// Whether the "running in the system tray" notice of the first start has been shown.
 [[nodiscard]] bool welcomeShown();
 void setWelcomeShown(bool shown);
 
