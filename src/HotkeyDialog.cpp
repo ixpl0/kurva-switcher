@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "Dialogs.h"
 #include "Log.h"
 #include "resource.h"
 
@@ -19,10 +20,8 @@ constexpr wchar_t kTitle[] = L"kurva-switcher";
 // ones belong to its window, so there is no clash.
 constexpr int kProbeId = 0x4B55;
 
-HWND openDialog = nullptr;
-
 struct State {
-    Hotkey current;
+    const Request* request = nullptr;
     Hotkey chosen;
 };
 
@@ -51,9 +50,14 @@ bool takenByAnotherProgram(const Hotkey& hotkey) {
 }
 
 // Why the combination cannot be used, or nullptr when it can.
-const wchar_t* problem(const Hotkey& hotkey) {
+const wchar_t* problem(const State& state) {
+    const Hotkey& hotkey = state.chosen;
+    const Request& request = *state.request;
     if (hotkey.empty()) {
-        return L"Press the key combination first.";
+        return request.allowEmpty ? nullptr : L"Press the key combination first.";
+    }
+    if (!request.other.empty() && hotkey == request.other) {
+        return L"This combination is already the other hotkey. Choose a different one.";
     }
     if (!(hotkey.modifiers & (MOD_CONTROL | MOD_ALT | MOD_WIN)) && !isSpareKey(hotkey.virtualKey)) {
         return L"On its own this key is needed for ordinary typing. Add Ctrl or Alt to the combination.";
@@ -145,34 +149,23 @@ LRESULT CALLBACK fieldProc(HWND field, UINT message, WPARAM wParam, LPARAM lPara
     return DefSubclassProc(field, message, wParam, lParam);
 }
 
-// The user has just clicked the tray menu on some monitor; that is where the dialog belongs,
-// not necessarily on the primary monitor where DS_CENTER puts it.
-void centerOnMouseMonitor(HWND dialog) {
-    POINT cursor{};
-    GetCursorPos(&cursor);
-    MONITORINFO monitor{};
-    monitor.cbSize = sizeof(monitor);
-    RECT window{};
-    if (!GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST), &monitor) ||
-        !GetWindowRect(dialog, &window)) {
-        return;
-    }
-    const RECT& work = monitor.rcWork;
-    const LONG x = work.left + ((work.right - work.left) - (window.right - window.left)) / 2;
-    const LONG y = work.top + ((work.bottom - work.top) - (window.bottom - window.top)) / 2;
-    SetWindowPos(dialog, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
 INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_INITDIALOG: {
         SetWindowLongPtrW(dialog, DWLP_USER, lParam);
         auto* state = reinterpret_cast<State*>(lParam);
+        const Request& request = *state->request;
+        if (request.prompt) {
+            SetDlgItemTextW(dialog, IDC_HOTKEY_PROMPT, request.prompt);
+        }
+        if (request.hint) {
+            SetDlgItemTextW(dialog, IDC_HOTKEY_HINT, request.hint);
+        }
         const HWND field = GetDlgItem(dialog, IDC_HOTKEY);
         SetWindowSubclass(field, fieldProc, 0, reinterpret_cast<DWORD_PTR>(state));
-        showHotkey(field, state->current);
-        centerOnMouseMonitor(dialog);
-        openDialog = dialog;
+        showHotkey(field, state->chosen);
+        dialogs::centerOnMouseMonitor(dialog);
+        dialogs::registerOpen(dialog);
         ShowWindow(dialog, SW_SHOW);
         SetForegroundWindow(dialog);
         return TRUE;  // The dialog manager then focuses the first control: the field.
@@ -182,7 +175,7 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lPa
         switch (LOWORD(wParam)) {
         case IDOK: {
             const auto* state = reinterpret_cast<const State*>(GetWindowLongPtrW(dialog, DWLP_USER));
-            if (const wchar_t* why = problem(state->chosen)) {
+            if (const wchar_t* why = problem(*state)) {
                 MessageBoxW(dialog, why, kTitle, MB_ICONINFORMATION);
                 return TRUE;
             }
@@ -197,7 +190,7 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lPa
         }
 
     case WM_DESTROY:
-        openDialog = nullptr;
+        dialogs::registerClosed(dialog);
         return FALSE;
 
     default:
@@ -207,8 +200,8 @@ INT_PTR CALLBACK dialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lPa
 
 }  // namespace
 
-std::optional<Hotkey> ask(HINSTANCE instance, HWND owner, const Hotkey& current) {
-    State state{.current = current, .chosen = current};
+std::optional<Hotkey> ask(HINSTANCE instance, HWND owner, const Request& request) {
+    State state{.request = &request, .chosen = request.current};
     const INT_PTR result = DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_HOTKEY), owner, dialogProc,
                                            reinterpret_cast<LPARAM>(&state));
     if (result == -1) {
@@ -219,12 +212,6 @@ std::optional<Hotkey> ask(HINSTANCE instance, HWND owner, const Hotkey& current)
         return std::nullopt;
     }
     return state.chosen;
-}
-
-void focus() {
-    if (openDialog) {
-        SetForegroundWindow(openDialog);
-    }
 }
 
 }  // namespace kurva::hotkeydialog

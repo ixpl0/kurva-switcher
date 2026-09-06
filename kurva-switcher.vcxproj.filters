@@ -18,10 +18,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\AboutDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\Clipboard.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\DarkMode.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Dialogs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\Hotkey.cpp">
@@ -34,6 +40,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\LayoutConverter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Log.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LogDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp">
@@ -51,12 +63,21 @@
     <ClCompile Include="src\TextSwitcher.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\TrayIcon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\AboutDialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\Clipboard.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\DarkMode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Dialogs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\Hotkey.h">
@@ -74,6 +95,9 @@
     <ClInclude Include="include\Log.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\LogDialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\MessagePump.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -84,6 +108,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\TextSwitcher.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\TrayIcon.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Version.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">

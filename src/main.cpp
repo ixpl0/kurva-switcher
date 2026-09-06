@@ -1,22 +1,27 @@
 #include <windows.h>
 
+#include <commctrl.h>
 #include <objbase.h>
 #include <shellapi.h>
-#include <strsafe.h>
 
+#include <array>
 #include <optional>
 #include <string>
+#include <vector>
 
+#include "AboutDialog.h"
 #include "DarkMode.h"
+#include "Dialogs.h"
 #include "Hotkey.h"
 #include "HotkeyDialog.h"
 #include "Log.h"
+#include "LogDialog.h"
 #include "Settings.h"
 #include "TextSwitcher.h"
-#include "resource.h"
+#include "TrayIcon.h"
 
-// Version 6 of the common controls: without it the message boxes are drawn in the classic
-// Windows 2000 style instead of the current visual style.
+// Version 6 of the common controls: without it the dialogs are drawn in the classic
+// Windows 2000 style instead of the current visual style, and SysLink does not exist.
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 namespace {
@@ -28,25 +33,40 @@ constexpr wchar_t kMutexName[] = L"Local\\kurva-switcher.single-instance";
 constexpr wchar_t kAppTitle[] = L"kurva-switcher";
 
 constexpr UINT WM_TRAYICON = WM_APP + 1;
-constexpr UINT kTrayIconId = 1;
 
 enum MenuItem : UINT {
-    kMenuHotkey = 1000,
+    kMenuEnabled = 1000,
+    kMenuHotkey,
+    kMenuSecondHotkey,
     kMenuSwitchLayout,
     kMenuRunAtStartup,
+    kMenuLog,
+    kMenuAbout,
     kMenuExit,
 };
+
+// Hotkey slot n is registered with Windows under the id kFirstHotkeyId + n.
+constexpr int kFirstHotkeyId = 1;
+
+// A combination held by another program is tried again this often, so that it becomes ours
+// as soon as that program quits, with no restart.
+constexpr UINT_PTR kRetryTimerId = 1;
+constexpr UINT kRetryIntervalMs = 3000;
 
 UINT checkMark(bool checked) {
     return checked ? static_cast<UINT>(MF_CHECKED) : static_cast<UINT>(MF_UNCHECKED);
 }
 
-// Ids of the hotkeys registered with Windows. A combination without modifiers (Pause, F9...)
-// is registered a second time with Shift, so that text selected with Shift and the arrow keys
-// can be converted without letting go of Shift. One with Ctrl or Alt is not: Shift on top of
-// it may well be some other program's shortcut.
-constexpr int kHotkeyId = 1;
-constexpr int kShiftedHotkeyId = 2;
+std::wstring join(const std::vector<std::wstring>& items, const wchar_t* separator) {
+    std::wstring text;
+    for (size_t index = 0; index < items.size(); ++index) {
+        if (index > 0) {
+            text += separator;
+        }
+        text += items[index];
+    }
+    return text;
+}
 
 class App {
 public:
@@ -64,16 +84,18 @@ private:
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
 
     bool createWindow();
-    bool registerHotkeys();
-    bool registerHotkey(int id, const Hotkey& hotkey) const;
+    // Registers every configured combination; returns the names of those that could not be.
+    std::vector<std::wstring> registerHotkeys();
+    bool registerHotkey(size_t slot, bool quiet) const;
     void unregisterHotkeys();
-    [[nodiscard]] std::wstring hotkeyDescription() const;
-    [[nodiscard]] std::wstring hotkeyFailureText() const;
-    void changeHotkey();
-    [[nodiscard]] NOTIFYICONDATAW trayIconData() const;
-    void addTrayIcon();
-    void updateTrayTooltip();
-    void removeTrayIcon();
+    void retryHotkeys();
+    void announceConflict(const std::vector<std::wstring>& failed);
+    void welcome();
+    [[nodiscard]] std::wstring status() const;
+    void updateStatus();
+    [[nodiscard]] std::wstring hotkeyLabel(size_t slot) const;
+    void setEnabled(bool enabled);
+    void changeHotkey(size_t slot);
     void showTrayMenu();
     void toggleRunAtStartup();
 
@@ -81,18 +103,18 @@ private:
     HWND window_ = nullptr;
     bool classRegistered_ = false;
     UINT taskbarCreatedMessage_ = 0;
-    bool trayIconAdded_ = false;
     bool menuOpen_ = false;
-    Hotkey hotkey_ = kDefaultHotkey;
-    bool hotkeyRegistered_ = false;
-    bool shiftedHotkeyRegistered_ = false;
-    bool choosingHotkey_ = false;
+    bool enabled_ = true;
+    std::array<Hotkey, settings::kHotkeySlots> hotkeys_{};
+    std::array<bool, settings::kHotkeySlots> registered_{};
+    bool retrying_ = false;  // The retry timer is running.
+    std::optional<TrayIcon> tray_;
     std::optional<TextSwitcher> switcher_;
 };
 
 App::~App() {
     unregisterHotkeys();
-    removeTrayIcon();
+    tray_.reset();
     switcher_.reset();
     if (window_) {
         DestroyWindow(window_);
@@ -104,6 +126,11 @@ App::~App() {
 
 bool App::initialize() {
     darkmode::allowDarkMenus();  // Before any window or menu exists.
+    INITCOMMONCONTROLSEX controls{};
+    controls.dwSize = sizeof(controls);
+    controls.dwICC = ICC_STANDARD_CLASSES | ICC_LINK_CLASS;  // SysLink, for the About box.
+    InitCommonControlsEx(&controls);
+    settings::initialize();
 
     if (!createWindow()) {
         MessageBoxW(nullptr, L"Failed to create the application window.", kAppTitle, MB_ICONERROR);
@@ -117,11 +144,27 @@ bool App::initialize() {
     }
     switcher_->setSwitchKeyboardLayout(settings::switchLayoutAfterConversion());
 
-    hotkey_ = settings::hotkey();
-    addTrayIcon();
-    if (!registerHotkeys()) {
-        // Keep running: the tray menu is the way to pick a combination that is free.
-        MessageBoxW(nullptr, hotkeyFailureText().c_str(), kAppTitle, MB_ICONWARNING);
+    enabled_ = settings::enabled();
+    for (size_t slot = 0; slot < settings::kHotkeySlots; ++slot) {
+        hotkeys_[slot] = settings::hotkey(slot);
+    }
+
+    tray_.emplace(instance_, window_, WM_TRAYICON);
+    tray_->setDisabled(!enabled_);
+    tray_->add();
+
+    const bool firstStart = !settings::welcomeShown();
+    std::vector<std::wstring> failed;
+    if (enabled_) {
+        failed = registerHotkeys();
+    }
+    updateStatus();
+    if (firstStart) {
+        welcome();
+        settings::setWelcomeShown(true);
+    }
+    if (!failed.empty()) {
+        announceConflict(failed);  // After the welcome: if only one notification stays, this one.
     }
     settings::repairAutostart();  // The build was moved or replaced since autostart was enabled.
     return true;
@@ -160,150 +203,214 @@ bool App::createWindow() {
     return true;
 }
 
-// Registers the configured combination (and its Shift variant, see kShiftedHotkeyId).
-// Returns whether the combination itself is registered; the variant is a bonus.
-bool App::registerHotkeys() {
+std::vector<std::wstring> App::registerHotkeys() {
     unregisterHotkeys();
-    hotkeyRegistered_ = registerHotkey(kHotkeyId, hotkey_);
-    if (hotkey_.modifiers == 0) {
-        Hotkey shifted = hotkey_;
-        shifted.modifiers = MOD_SHIFT;
-        shiftedHotkeyRegistered_ = registerHotkey(kShiftedHotkeyId, shifted);
+    std::vector<std::wstring> failed;
+    for (size_t slot = 0; slot < settings::kHotkeySlots; ++slot) {
+        if (hotkeys_[slot].empty()) {
+            continue;
+        }
+        registered_[slot] = registerHotkey(slot, false);
+        if (!registered_[slot]) {
+            failed.push_back(hotkeys_[slot].name());
+        }
     }
-    return hotkeyRegistered_;
+    if (!failed.empty()) {
+        retrying_ = SetTimer(window_, kRetryTimerId, kRetryIntervalMs, nullptr) != 0;
+    }
+    return failed;
 }
 
-bool App::registerHotkey(int id, const Hotkey& hotkey) const {
+bool App::registerHotkey(size_t slot, bool quiet) const {
+    const Hotkey& hotkey = hotkeys_[slot];
+    const int id = kFirstHotkeyId + static_cast<int>(slot);
     // MOD_NOREPEAT keeps a held-down key from firing the conversion again and again.
     bool ok = RegisterHotKey(window_, id, hotkey.modifiers | MOD_NOREPEAT, hotkey.virtualKey) != FALSE;
     if (!ok) {
         ok = RegisterHotKey(window_, id, hotkey.modifiers, hotkey.virtualKey) != FALSE;
     }
-    if (!ok) {
+    if (!ok && !quiet) {
         log::info(L"hotkey: cannot register {} (error {})", hotkey.name(), GetLastError());
     }
     return ok;
 }
 
 void App::unregisterHotkeys() {
-    if (hotkeyRegistered_) {
-        UnregisterHotKey(window_, kHotkeyId);
-        hotkeyRegistered_ = false;
+    if (retrying_) {
+        KillTimer(window_, kRetryTimerId);
+        retrying_ = false;
     }
-    if (shiftedHotkeyRegistered_) {
-        UnregisterHotKey(window_, kShiftedHotkeyId);
-        shiftedHotkeyRegistered_ = false;
+    for (size_t slot = 0; slot < settings::kHotkeySlots; ++slot) {
+        if (registered_[slot]) {
+            UnregisterHotKey(window_, kFirstHotkeyId + static_cast<int>(slot));
+            registered_[slot] = false;
+        }
     }
 }
 
-// "Pause or Shift+Pause", "Ctrl+Alt+K".
-std::wstring App::hotkeyDescription() const {
-    std::wstring text = hotkey_.name();
-    if (hotkey_.modifiers == 0) {
-        text += L" or Shift+" + hotkey_.name();
+// Timer: the combinations that were taken when they were last tried.
+void App::retryHotkeys() {
+    std::vector<std::wstring> gained;
+    bool stillTaken = false;
+    for (size_t slot = 0; slot < settings::kHotkeySlots; ++slot) {
+        if (hotkeys_[slot].empty() || registered_[slot]) {
+            continue;
+        }
+        registered_[slot] = registerHotkey(slot, true);
+        if (registered_[slot]) {
+            gained.push_back(hotkeys_[slot].name());
+        } else {
+            stillTaken = true;
+        }
     }
-    return text;
+    if (!gained.empty()) {
+        updateStatus();
+        log::info(L"hotkey: {} registered after all", join(gained, L" and "));
+        tray_->notify(kAppTitle,
+                      join(gained, L" and ") + (gained.size() == 1 ? L" is" : L" are") +
+                          L" no longer taken: converting the selected text works now.",
+                      TrayIcon::Notice::Info);
+    }
+    if (!stillTaken && retrying_) {
+        KillTimer(window_, kRetryTimerId);
+        retrying_ = false;
+    }
 }
 
-std::wstring App::hotkeyFailureText() const {
-    return L"Could not register the hotkey " + hotkey_.name() +
-           L".\n\nAnother program (Punto Switcher, for example) is probably using it. Right-click the frog "
-           L"in the notification area and choose \"Hotkey\" to pick another combination.";
+void App::announceConflict(const std::vector<std::wstring>& failed) {
+    const bool one = failed.size() == 1;
+    const std::wstring text = std::wstring(L"Could not register ") + (one ? L"the hotkey " : L"the hotkeys ") +
+                              join(failed, L" and ") + L": another program (Punto Switcher, for example) uses " +
+                              (one ? L"it" : L"them") +
+                              L". Right-click the frog to choose a different combination; meanwhile it is "
+                              L"retried every few seconds.";
+    tray_->notify(L"kurva-switcher: hotkey conflict", text, TrayIcon::Notice::Warning);
 }
 
-void App::changeHotkey() {
-    if (choosingHotkey_) {
-        hotkeydialog::focus();
+// The first start: the program has no window, so say where it went and what it does.
+void App::welcome() {
+    std::vector<std::wstring> names;
+    for (const Hotkey& hotkey : hotkeys_) {
+        if (!hotkey.empty()) {
+            names.push_back(hotkey.name());
+        }
+    }
+    const std::wstring text =
+        names.empty() ? std::wstring(L"Right-click the frog in the notification area to choose a hotkey. Then select "
+                                     L"text typed in the wrong layout and press it.")
+                      : L"Select text typed in the wrong layout and press " + join(names, L" or ") +
+                            L" to retype it. Right-click the frog in the notification area for the settings.";
+    tray_->notify(L"kurva-switcher is running", text, TrayIcon::Notice::Welcome);
+}
+
+// The second line of the tray tooltip.
+std::wstring App::status() const {
+    if (!enabled_) {
+        return L"Disabled. Right-click the frog to enable it.";
+    }
+    std::vector<std::wstring> names;
+    for (size_t slot = 0; slot < settings::kHotkeySlots; ++slot) {
+        if (registered_[slot]) {
+            names.push_back(hotkeys_[slot].name());
+        }
+    }
+    if (names.empty()) {
+        return L"No hotkey is registered. Right-click the frog to choose one.";
+    }
+    return join(names, L" or ") + L" converts the selected text";
+}
+
+void App::updateStatus() {
+    tray_->setStatus(status());
+}
+
+std::wstring App::hotkeyLabel(size_t slot) const {
+    const Hotkey& hotkey = hotkeys_[slot];
+    if (hotkey.empty()) {
+        return L"none";
+    }
+    if (enabled_ && !registered_[slot]) {
+        return hotkey.name() + L" (taken by another program)";
+    }
+    return hotkey.name();
+}
+
+void App::setEnabled(bool enabled) {
+    enabled_ = enabled;
+    settings::setEnabled(enabled);
+    tray_->setDisabled(!enabled);
+    std::vector<std::wstring> failed;
+    if (enabled) {
+        failed = registerHotkeys();
+    } else {
+        unregisterHotkeys();
+    }
+    updateStatus();
+    log::info(L"hotkeys {}", enabled ? L"enabled" : L"disabled");
+    if (!failed.empty()) {
+        announceConflict(failed);
+    }
+}
+
+void App::changeHotkey(size_t slot) {
+    if (dialogs::focusOpen()) {
         return;
     }
-    choosingHotkey_ = true;
-    // While the dialog is open the current combination must reach its field as ordinary keys.
+    // While the dialog is open the current combinations must reach its field as ordinary keys.
     unregisterHotkeys();
-    if (const std::optional<Hotkey> chosen = hotkeydialog::ask(instance_, window_, hotkey_)) {
-        hotkey_ = *chosen;
-        settings::setHotkey(hotkey_);
-        updateTrayTooltip();
-        log::info(L"hotkey: now {}", hotkey_.name());
+    const size_t other = (slot + 1) % settings::kHotkeySlots;
+    const bool allowEmpty = !hotkeys_[other].empty();
+    std::wstring hint = slot == 0 ? L"Pause, F9... or a combination with Ctrl, Alt or Win."
+                                  : L"Another combination for the same action.";
+    if (allowEmpty) {
+        hint += L" Backspace clears the field.";
     }
-    choosingHotkey_ = false;
-    if (!registerHotkeys()) {
-        MessageBoxW(window_, hotkeyFailureText().c_str(), kAppTitle, MB_ICONWARNING);
+    const hotkeydialog::Request request{
+        .current = hotkeys_[slot],
+        .other = hotkeys_[other],
+        .prompt = slot == 0 ? L"Press the key combination that converts the selected text:"
+                            : L"Press the second key combination that converts the selected text:",
+        .hint = hint.c_str(),
+        .allowEmpty = allowEmpty,
+    };
+    if (const std::optional<Hotkey> chosen = hotkeydialog::ask(instance_, window_, request)) {
+        hotkeys_[slot] = *chosen;
+        settings::setHotkey(slot, *chosen);
+        log::info(L"hotkey {}: now {}", slot + 1, chosen->empty() ? std::wstring(L"none") : chosen->name());
     }
-}
-
-NOTIFYICONDATAW App::trayIconData() const {
-    NOTIFYICONDATAW data{};
-    data.cbSize = sizeof(data);
-    data.hWnd = window_;
-    data.uID = kTrayIconId;
-    StringCchCopyW(data.szTip, ARRAYSIZE(data.szTip),
-                   (L"kurva-switcher\n" + hotkeyDescription() + L" converts the selected text").c_str());
-    return data;
-}
-
-void App::addTrayIcon() {
-    NOTIFYICONDATAW data = trayIconData();
-    data.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
-    data.uCallbackMessage = WM_TRAYICON;
-    // The notification area shows the icon at 16x16 (100% scaling), 20x20 (125%) and so on, but
-    // asking Windows for that size ends badly: kurva.ico has nothing smaller than 64x64, and both
-    // LoadImage and LoadIconMetric (for the "standard" sizes 16, 32 and 48) shrink it by dropping
-    // pixels, which looks jagged. So load the large icon size instead (SM_CXICON, 32x32 at 100%),
-    // exactly as LoadIcon did in the old builds, and let the shell scale it down with its own,
-    // much better filter.
-    const HICON icon = static_cast<HICON>(
-        LoadImageW(instance_, MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE));
-    data.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
-
-    if (trayIconAdded_) {
-        Shell_NotifyIconW(NIM_DELETE, &data);
+    std::vector<std::wstring> failed;
+    if (enabled_) {
+        failed = registerHotkeys();
     }
-    trayIconAdded_ = Shell_NotifyIconW(NIM_ADD, &data) != FALSE;
-    if (trayIconAdded_) {
-        data.uVersion = NOTIFYICON_VERSION_4;
-        Shell_NotifyIconW(NIM_SETVERSION, &data);
+    updateStatus();
+    if (!failed.empty()) {
+        announceConflict(failed);
     }
-    if (icon) {
-        DestroyIcon(icon);  // The shell keeps its own copy.
-    }
-}
-
-void App::updateTrayTooltip() {
-    if (!trayIconAdded_) {
-        return;
-    }
-    NOTIFYICONDATAW data = trayIconData();
-    data.uFlags = NIF_TIP | NIF_SHOWTIP;
-    Shell_NotifyIconW(NIM_MODIFY, &data);
-}
-
-void App::removeTrayIcon() {
-    if (!trayIconAdded_) {
-        return;
-    }
-    NOTIFYICONDATAW data = trayIconData();
-    Shell_NotifyIconW(NIM_DELETE, &data);
-    trayIconAdded_ = false;
 }
 
 void App::showTrayMenu() {
     if (menuOpen_) {
         return;
     }
-    if (choosingHotkey_) {
-        hotkeydialog::focus();  // The dialog is modal: a tray click just brings it back.
-        return;
+    if (dialogs::focusOpen()) {
+        return;  // A dialog is up: a tray click just brings it back.
     }
     const HMENU menu = CreatePopupMenu();
     if (!menu) {
         return;
     }
-    AppendMenuW(menu, MF_STRING, kMenuHotkey, (L"Hotkey: " + hotkey_.name() + L"...").c_str());
+    AppendMenuW(menu, MF_STRING | checkMark(enabled_), kMenuEnabled, L"Enabled");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kMenuHotkey, (L"Hotkey: " + hotkeyLabel(0) + L"...").c_str());
+    AppendMenuW(menu, MF_STRING, kMenuSecondHotkey, (L"Second hotkey: " + hotkeyLabel(1) + L"...").c_str());
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | checkMark(settings::switchLayoutAfterConversion()),
                 kMenuSwitchLayout, L"Switch keyboard layout after conversion");
     AppendMenuW(menu, MF_STRING | checkMark(settings::runAtStartup()),
                 kMenuRunAtStartup, L"Run at Windows startup");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kMenuLog, L"Log...");
+    AppendMenuW(menu, MF_STRING, kMenuAbout, L"About kurva-switcher...");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kMenuExit, L"Exit");
 
@@ -319,8 +426,14 @@ void App::showTrayMenu() {
     DestroyMenu(menu);
 
     switch (chosen) {
+    case kMenuEnabled:
+        setEnabled(!enabled_);
+        break;
     case kMenuHotkey:
-        changeHotkey();
+        changeHotkey(0);
+        break;
+    case kMenuSecondHotkey:
+        changeHotkey(1);
         break;
     case kMenuSwitchLayout: {
         const bool enabled = !settings::switchLayoutAfterConversion();
@@ -330,6 +443,12 @@ void App::showTrayMenu() {
     }
     case kMenuRunAtStartup:
         toggleRunAtStartup();
+        break;
+    case kMenuLog:
+        logdialog::show(instance_, window_);
+        break;
+    case kMenuAbout:
+        aboutdialog::show(instance_, window_);
         break;
     case kMenuExit:
         PostQuitMessage(0);
@@ -382,8 +501,14 @@ LRESULT CALLBACK App::windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 LRESULT App::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_HOTKEY:
-        if (!menuOpen_ && switcher_) {
+        if (!menuOpen_ && enabled_ && switcher_) {
             switcher_->run();
+        }
+        return 0;
+
+    case WM_TIMER:
+        if (wParam == kRetryTimerId) {
+            retryHotkeys();
         }
         return 0;
 
@@ -418,7 +543,7 @@ LRESULT App::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
     default:
         if (message == taskbarCreatedMessage_ && taskbarCreatedMessage_ != 0) {
-            addTrayIcon();  // Explorer restarted and lost our icon.
+            tray_->add();  // Explorer restarted and lost our icon.
             return 0;
         }
         return DefWindowProcW(window_, message, wParam, lParam);

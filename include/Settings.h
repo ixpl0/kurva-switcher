@@ -6,13 +6,34 @@
 
 namespace kurva::settings {
 
-// Stored under HKEY_CURRENT_USER\Software\kurva-switcher.
-[[nodiscard]] bool switchLayoutAfterConversion();
-void setSwitchLayoutAfterConversion(bool enabled);
+// Everything is kept in kurva-switcher.ini next to the executable, so the program is portable:
+// copy the folder and the settings come along, delete it and nothing is left behind. When that
+// folder cannot be written (Program Files, a read-only share), the file goes to
+// %LOCALAPPDATA%\kurva-switcher instead. The registry is touched by the autostart entry only.
 
-// The key combination that starts a conversion: Pause unless another one was chosen.
-[[nodiscard]] Hotkey hotkey();
-void setHotkey(const Hotkey& combination);
+// Picks the file, moves the settings of older builds out of the registry and writes the
+// defaults for whatever is missing. Call once at startup, before anything else here.
+void initialize();
+
+// Full path of the settings file.
+[[nodiscard]] std::wstring filePath();
+
+// Off: no hotkey is registered and the tray icon shows it.
+[[nodiscard]] bool enabled();
+void setEnabled(bool value);
+
+[[nodiscard]] bool switchLayoutAfterConversion();
+void setSwitchLayoutAfterConversion(bool value);
+
+// Two combinations start a conversion: Pause and Shift+Pause unless others were chosen.
+// Either may be empty.
+inline constexpr size_t kHotkeySlots = 2;
+[[nodiscard]] Hotkey hotkey(size_t slot);
+void setHotkey(size_t slot, const Hotkey& combination);
+
+// Whether the "running in the notification area" notice of the first start has been shown.
+[[nodiscard]] bool welcomeShown();
+void setWelcomeShown(bool shown);
 
 // Windows autostart: the per-user Run key, so no installer or administrator rights are needed.
 struct Autostart {

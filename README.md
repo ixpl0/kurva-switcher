@@ -13,7 +13,7 @@ Originally, the author developed it for personal use. This was due to a lack of 
 ## Functionality
 
 - **Hotkey**  
-  Select text and press `Pause` to retype it in the other layout. Any other combination can be chosen in the tray menu: *Hotkey: Pause...* opens a dialog with a field where you simply press the new one, `Ctrl + Alt + K` or `F9` for example. A single key such as `Pause` also works with `Shift` held down, so text selected with `Shift` and the arrow keys converts without letting go of `Shift`.
+  Select text and press `Pause` to retype it in the other layout. `Shift + Pause` does the same, so text selected with `Shift` and the arrow keys converts without letting go of `Shift`. Both combinations can be changed in the tray menu: *Hotkey: Pause...* and *Second hotkey: Shift+Pause...* open a dialog with a field where you simply press the new one, `Ctrl + Alt + K` or `F9` for example; `Backspace` clears the second one if a single hotkey is enough. When another program holds a combination (Punto Switcher, say), a notification names it, and `kurva-switcher` keeps trying every few seconds, so the hotkey becomes yours as soon as that program quits.
 
 - **Layout switching**  
   After a conversion the keyboard layout of the window switches to the language the text now belongs to, so you can just keep typing. Can be turned off in the tray menu.
@@ -22,7 +22,10 @@ Originally, the author developed it for personal use. This was due to a lack of 
   Whatever you had on the clipboard - text, images, files, formatted content - is still there after a conversion, and the converted text does not show up in the clipboard history (`Win + V`).
 
 - **Tray menu**  
-  Right-click the frog in the notification area to change the hotkey, toggle layout switching, enable *Run at Windows startup*, or exit. The menu follows the light or dark app mode of Windows. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
+  Right-click the frog in the notification area to change the hotkeys, toggle layout switching, enable *Run at Windows startup*, open the log or the About box, or exit. Uncheck *Enabled* to switch the hotkeys off for a while, for a game or a virtual machine that wants `Pause` for itself: the frog shows inverted colors until you check it again. The menu follows the light or dark app mode of Windows. Autostart records the full path of the executable you are running (per-user `Run` registry key, no administrator rights needed); if you later move or replace the file, the entry is repointed the next time you start the new copy.
+
+- **Portable**  
+  Settings live in `kurva-switcher.ini` next to the executable: copy the folder and they come along, delete it and nothing is left behind. If that folder cannot be written (`Program Files`, say), the file goes to `%LOCALAPPDATA%\kurva-switcher` instead; *About kurva-switcher...* in the tray menu shows which file is in use and opens it. The registry is touched only by the autostart entry, and only while it is enabled. Settings of older builds are moved out of the registry on the first start.
 
 - **Open source**  
   Build the application from source without relying on external binaries.
@@ -46,7 +49,7 @@ Each word of the selection is converted in the direction of its majority of char
 
 ### Troubleshooting
 
-`kurva-switcher` writes a short log of every conversion to the debugger output. Run [DebugView](https://learn.microsoft.com/sysinternals/downloads/debugview) from Sysinternals to see it: which application had focus, whether UI Automation or `Ctrl + C` was used, when the target read the clipboard, and so on. The log never contains the text itself.
+*Log...* in the tray menu opens a window with a short log of every conversion: which application had focus, whether UI Automation or `Ctrl + C` was used, when the target read the clipboard, and so on. The window updates live, so reproduce the problem while it is open, then press *Copy* to paste the lines into a bug report. The same lines go to the debugger output stream, where [DebugView](https://learn.microsoft.com/sysinternals/downloads/debugview) from Sysinternals shows them. The log never contains the text itself.
 
 Known limitations:
 
@@ -56,7 +59,7 @@ Known limitations:
 
 ## Building
 
-Open `kurva-switcher.sln` in Visual Studio 2022 (Desktop development with C++ workload) and build the `Release | x64` configuration. The executable lands in `x64\Release\kurva-switcher.exe`; it is portable and needs no installation.
+Open `kurva-switcher.sln` in Visual Studio 2022 (Desktop development with C++ workload) and build the `Release | x64` configuration. The executable lands in `x64\Release\kurva-switcher.exe`; it is portable and needs no installation. The version number comes from `include/Version.h`; it ends up in the file properties of the executable and in the About box.
 
 Every push is also built by [GitHub Actions](.github/workflows/build.yml); the workflow runs the unit tests for the conversion logic (`tests\LayoutConverterTest.cpp`) and publishes the executable as a build artifact.
 

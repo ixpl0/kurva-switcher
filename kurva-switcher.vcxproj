@@ -96,30 +96,40 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\AboutDialog.cpp" />
     <ClCompile Include="src\Clipboard.cpp" />
     <ClCompile Include="src\DarkMode.cpp" />
+    <ClCompile Include="src\Dialogs.cpp" />
     <ClCompile Include="src\Hotkey.cpp" />
     <ClCompile Include="src\HotkeyDialog.cpp" />
     <ClCompile Include="src\Input.cpp" />
     <ClCompile Include="src\LayoutConverter.cpp" />
+    <ClCompile Include="src\Log.cpp" />
+    <ClCompile Include="src\LogDialog.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\MessagePump.cpp" />
     <ClCompile Include="src\Selection.cpp" />
     <ClCompile Include="src\Settings.cpp" />
     <ClCompile Include="src\TextSwitcher.cpp" />
+    <ClCompile Include="src\TrayIcon.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\AboutDialog.h" />
     <ClInclude Include="include\Clipboard.h" />
     <ClInclude Include="include\DarkMode.h" />
+    <ClInclude Include="include\Dialogs.h" />
     <ClInclude Include="include\Hotkey.h" />
     <ClInclude Include="include\HotkeyDialog.h" />
     <ClInclude Include="include\Input.h" />
     <ClInclude Include="include\LayoutConverter.h" />
     <ClInclude Include="include\Log.h" />
+    <ClInclude Include="include\LogDialog.h" />
     <ClInclude Include="include\MessagePump.h" />
     <ClInclude Include="include\Selection.h" />
     <ClInclude Include="include\Settings.h" />
     <ClInclude Include="include\TextSwitcher.h" />
+    <ClInclude Include="include\TrayIcon.h" />
+    <ClInclude Include="include\Version.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

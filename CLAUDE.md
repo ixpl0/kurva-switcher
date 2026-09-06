@@ -8,7 +8,14 @@ this file too; keep it short and keep it current.
 `kurva-switcher` is a Windows-only Win32 tray utility that retypes selected
 text in the other keyboard layout (C++20, MSVC, Visual Studio 2022 solution
 `kurva-switcher.sln`). README.md explains how it works. The code lives in
-`src/` and `include/`, the conversion-logic tests in `tests/`.
+`src/` and `include/`, the conversion-logic tests in `tests/`. Settings are
+an ini file next to the exe (`src/Settings.cpp`); the registry is used for
+the autostart `Run` entry only. The version number lives in
+`include/Version.h`: `Resource.rc` turns it into the VERSIONINFO resource and
+the About dialog shows it. `Resource.rc` is UTF-16LE with a BOM and CRLF line
+endings; rewrite it with a script that keeps that encoding (plain `sed` or a
+heredoc turns it into UTF-8 and the resource compiler chokes). UI strings are
+English.
 
 ## Working agreement with the author
 
