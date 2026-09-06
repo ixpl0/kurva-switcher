@@ -59,7 +59,7 @@ bool fileExists(const std::wstring& path) {
     return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-// C:\path\app.exe  ->  C:\path\
+// The folder of a file, trailing backslash included: C:\path\app.exe gives "C:\path\".
 std::wstring directoryOf(std::wstring_view path) {
     const size_t slash = path.find_last_of(L"\\/");
     if (slash == std::wstring_view::npos) {
